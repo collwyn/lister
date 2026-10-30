@@ -19,7 +19,9 @@ function endpointUrl() {
 export async function GET(req: NextRequest) {
   const challengeCode = req.nextUrl.searchParams.get("challenge_code");
   if (!challengeCode) return NextResponse.json({ error: "Missing challenge_code" }, { status: 400 });
-  const challengeResponse = deletionChallengeResponse(challengeCode, env().EBAY_VERIFICATION_TOKEN, endpointUrl());
+  const token = env().EBAY_VERIFICATION_TOKEN;
+  if (!token) return NextResponse.json({ error: "EBAY_VERIFICATION_TOKEN is not set." }, { status: 503 });
+  const challengeResponse = deletionChallengeResponse(challengeCode, token, endpointUrl());
   return NextResponse.json({ challengeResponse });
 }
 

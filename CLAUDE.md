@@ -17,7 +17,8 @@ Personal eBay listing tool: photos → Claude draft → human review → publish
 - `src/lib/session.ts` and `src/middleware.ts` must stay edge-safe (no Node APIs).
 - eBay request bodies are built by pure functions in `src/lib/ebay/listing.ts`; keep them pure and tested.
 - Publishing goes through the `ListingPublisher` interface (`src/lib/ebay/publisher.ts`) so the Inventory API implementation can be swapped for a Trading API one.
-- Categories come from eBay's live category tree (Taxonomy API), cached per category in `category_cache` and refreshed when eBay's tree version changes. Never hard-code a category list.
+- Categories come from eBay's live category tree (Taxonomy API), cached per category in `category_cache` and refreshed when eBay's tree version changes. Never hard-code a category list. (The only exception is the test fixture in `src/lib/ebay/mock.ts`, ids prefixed `mock-`, used solely when `EBAY_ENV=mock`.)
+- Test mode (`EBAY_ENV=mock`): `ebayFetch` hands every call to `mockEbay`, so app code never branches on mock mode except for sign-in (`auth.ts`, connect route) and listing links. When adding a new eBay call, add its path to `mockEbay` too, or test mode will answer "Test mode doesn't handle …".
 - Every listing passes human review. Don't add auto-publish paths.
 - API errors reach the UI as `{ error }` with a readable message (`src/lib/api.ts`).
 

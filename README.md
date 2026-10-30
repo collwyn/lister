@@ -16,6 +16,19 @@ Runs on [Sevalla](https://sevalla.com): one Node app, a managed Postgres databas
 
 You need four accounts: Sevalla, eBay Developers Program, Anthropic (Claude Console), and GitHub (this repo). Do everything in eBay's **sandbox** first.
 
+### 0. Waiting on eBay? Start in test mode
+
+eBay takes a while to approve a new developer account. Meanwhile, set `EBAY_ENV=mock` and leave the `EBAY_*` key variables empty. Everything else is real: Sevalla, your buckets, photo processing, Claude's drafts, the review screen and the publish flow. eBay is simulated:
+
+- **Connect eBay** connects instantly; **Create test policies** adds test payment, return and shipping policies.
+- Categories come from a small built-in test set (comics, books, magazines, electronics, household, records, tools, toys and a catch-all), not eBay's full tree.
+- There are no price comparisons, so prices show low confidence.
+- **Approve and list** checks the listing the way eBay does (required item specifics, allowed condition) and records a test listing ID. Nothing is sent to eBay.
+
+The header shows **Test mode: no eBay**. When your eBay keys arrive, fill them in and change `EBAY_ENV` to `sandbox`. Items you listed in test mode can then be listed for real; test settings and listings are kept separately.
+
+Follow steps 1, 3 and 4 below now; do step 2 when eBay approves you.
+
 ### 1. Sevalla
 
 1. **Database**: create a PostgreSQL database. Copy its *internal* connection URL (used by apps in the same Sevalla project).
@@ -58,7 +71,7 @@ Create an API key in the [Claude Console](https://platform.claude.com) and set `
 
 1. Sign in with your password.
 2. **Settings** → *Connect eBay*, sign in with the sandbox test user, approve.
-3. *Turn on business policies*, then *Create sandbox test policies* (sandbox only), pick them and *Save policies*.
+3. *Turn on business policies*, then *Create test policies* (sandbox and test mode only), pick them and *Save policies*.
 4. Enter your ship-from city, state and ZIP, *Save location*.
 5. **New item** → upload a few photos of one item. Claude writes the draft (30–90 seconds).
 6. Review, edit, *Approve and list on eBay*. The confirmation links to the sandbox listing.

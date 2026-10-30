@@ -20,12 +20,19 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   CLAUDE_MODEL: z.string().optional(),
 
-  EBAY_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
-  EBAY_CLIENT_ID: z.string().min(1),
-  EBAY_CLIENT_SECRET: z.string().min(1),
-  EBAY_RUNAME: z.string().min(1),
+  // "mock" answers eBay calls locally (src/lib/ebay/mock.ts) so the app can be
+  // tested before eBay approves a developer account. The keys below are then optional.
+  EBAY_ENV: z.enum(["mock", "sandbox", "production"]).default("sandbox"),
+  EBAY_CLIENT_ID: z.string().min(1).optional(),
+  EBAY_CLIENT_SECRET: z.string().min(1).optional(),
+  EBAY_RUNAME: z.string().min(1).optional(),
   EBAY_MARKETPLACE_ID: z.string().default("EBAY_US"),
-  EBAY_VERIFICATION_TOKEN: z.string().min(32).max(80),
+  EBAY_VERIFICATION_TOKEN: z.string().min(32).max(80).optional(),
+}).superRefine((v, ctx) => {
+  if (v.EBAY_ENV === "mock") return;
+  for (const key of ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_RUNAME", "EBAY_VERIFICATION_TOKEN"] as const) {
+    if (!v[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `required when EBAY_ENV is ${v.EBAY_ENV}` });
+  }
 });
 
 export type Env = z.infer<typeof schema>;
@@ -50,3 +57,16 @@ export function env(): Env {
 }
 
 export const claudeModel = () => env().CLAUDE_MODEL || "claude-sonnet-5-5";
+
+export const isMockEbay = () => env().EBAY_ENV === "mock";
+
+/** eBay keys, guaranteed present outside test mode (checked in env()). */
+export function ebayKeys() {
+  const e = env();
+  if (e.EBAY_ENV === "mock") throw new Error("eBay keys aren't used in test mode.");
+  return {
+    clientId: e.EBAY_CLIENT_ID!,
+    clientSecret: e.EBAY_CLIENT_SECRET!,
+    ruName: e.EBAY_RUNAME!,
+  };
+}

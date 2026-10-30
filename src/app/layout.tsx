@@ -10,7 +10,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const signedIn = (await cookies()).has(SESSION_COOKIE);
-  const environment = process.env.EBAY_ENV === "production" ? "production" : "sandbox";
+  const environment = process.env.EBAY_ENV === "production" ? "production" : process.env.EBAY_ENV === "mock" ? "mock" : "sandbox";
   return (
     <html lang="en">
       <body>
@@ -26,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/settings">Settings</Link>
               </nav>
               <span className={`env ${environment}`} title="eBay environment">
-                eBay {environment}
+                {environment === "mock" ? "Test mode: no eBay" : `eBay ${environment}`}
               </span>
               <SignOutButton />
             </div>

@@ -147,8 +147,8 @@ export function DraftEditor({
     setError(null);
     setNotice(null);
     try {
-      const res = await api<{ url: string }>(`/api/items/${item.id}/publish`, { method: "POST" });
-      setNotice(`Listed on eBay: ${res.url}`);
+      const res = await api<{ url: string | null; listingId: string }>(`/api/items/${item.id}/publish`, { method: "POST" });
+      setNotice(res.url ? `Listed on eBay: ${res.url}` : `Test listing ${res.listingId} recorded. Test mode: nothing was sent to eBay.`);
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -187,7 +187,8 @@ export function DraftEditor({
     }
   }
 
-  const listed = item.status === "listed";
+  // Listed in the CURRENT eBay environment (a test-mode listing doesn't lock the item).
+  const listed = item.status === "listed" && !!listing?.ebayListingId;
   const photoUrls = photos.filter((p) => p.url && !p.isDivider);
   const flags = (item.flags as string[]) ?? [];
   const comps = (draft?.comps ?? []) as Comp[];
@@ -202,9 +203,15 @@ export function DraftEditor({
 
       {error && <p className="error">{error}</p>}
       {notice && <p className="ok">{notice.startsWith("Listed") ? <ListedNotice text={notice} /> : notice}</p>}
-      {listed && listing?.url && !notice && (
+      {listed && !notice && (
         <p className="ok">
-          Listed on eBay ({listing.environment}): <a href={listing.url} target="_blank" rel="noopener noreferrer">{listing.url}</a>
+          {listing?.url ? (
+            <>
+              Listed on eBay ({listing.environment}): <a href={listing.url} target="_blank" rel="noopener noreferrer">{listing.url}</a>
+            </>
+          ) : (
+            <>Test listing {listing?.ebayListingId} recorded. Test mode: nothing was sent to eBay.</>
+          )}
         </p>
       )}
 
