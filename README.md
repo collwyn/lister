@@ -22,7 +22,9 @@ You need four accounts: Sevalla, eBay Developers Program, Anthropic (Claude Cons
 2. **Object storage**: create two buckets:
    - `listing-desk-originals`: leave **private**.
    - `listing-desk-photos`: turn on **public access**. Its public URL looks like `https://listing-desk-photos.sevalla.storage`.
-   From a bucket's connection details, copy the S3 endpoint, access key ID and secret key.
+   Any names work; put the real names in `S3_BUCKET_ORIGINALS` and `S3_BUCKET_PUBLIC`.
+   From the **public** bucket's connection details, copy the S3 endpoint, access key ID and secret key into `S3_ENDPOINT`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
+   If the **private** bucket shows different values (Sevalla usually gives each bucket its own keys), copy them into `S3_ORIGINALS_ENDPOINT`, `S3_ORIGINALS_ACCESS_KEY_ID` and `S3_ORIGINALS_SECRET_ACCESS_KEY`.
 3. **Application**: create an app from this GitHub repo.
    - Build command: `npm run build` (Sevalla detects Node automatically)
    - Start command: `npm start` (runs database migrations, then starts the app)
