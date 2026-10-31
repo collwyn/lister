@@ -9,10 +9,16 @@ const schema = z.object({
   ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY is missing"),
   DATABASE_URL: z.string().min(1),
 
+  // Endpoint and keys for the public photos bucket (and for both buckets
+  // unless the S3_ORIGINALS_* overrides below are set).
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().default("auto"),
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
+  // Optional: separate endpoint/keys for the private originals bucket.
+  S3_ORIGINALS_ENDPOINT: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  S3_ORIGINALS_ACCESS_KEY_ID: z.string().optional().transform((v) => v || undefined),
+  S3_ORIGINALS_SECRET_ACCESS_KEY: z.string().optional().transform((v) => v || undefined),
   S3_BUCKET_ORIGINALS: z.string().min(1),
   S3_BUCKET_PUBLIC: z.string().min(1),
   PUBLIC_PHOTO_BASE_URL: z.string().url(),
