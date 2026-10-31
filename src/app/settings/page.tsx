@@ -1,6 +1,7 @@
 import { getAccount } from "@/lib/ebay/auth";
 import { env } from "@/lib/env";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { StorageCheck } from "@/components/StorageCheck";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         justConnected={sp.connected === "1"}
         connectError={sp.ebay_error ?? null}
       />
+      <StorageCheck />
     </main>
   );
 }
