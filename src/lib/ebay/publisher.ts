@@ -77,7 +77,9 @@ export function getPublisher(): ListingPublisher {
   return new InventoryApiPublisher();
 }
 
-export function listingUrl(listingId: string, environment: string): string {
+/** Link to the listing on eBay; null in test mode, where nothing is sent to eBay. */
+export function listingUrl(listingId: string, environment: string): string | null {
+  if (environment === "mock") return null;
   return environment === "sandbox"
     ? `https://www.sandbox.ebay.com/itm/${listingId}`
     : `https://www.ebay.com/itm/${listingId}`;

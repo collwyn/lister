@@ -62,7 +62,7 @@ const CATEGORY_TYPES = [{ name: "ALL_EXCLUDING_MOTORS_VEHICLES", default: false 
  * policies in Seller Hub instead and pick them in Settings.
  */
 export async function createStarterPolicies() {
-  if (env().EBAY_ENV !== "sandbox") throw new Error("Starter policies are for the sandbox only.");
+  if (env().EBAY_ENV === "production") throw new Error("Test policies are for the sandbox and test mode only.");
   const token = await userToken();
   const marketplaceId = env().EBAY_MARKETPLACE_ID;
   const stamp = new Date().toISOString().slice(0, 10);

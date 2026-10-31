@@ -15,7 +15,7 @@ const post = (url: string, body?: unknown) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 
 export function SettingsPanel(props: {
-  environment: "sandbox" | "production";
+  environment: "mock" | "sandbox" | "production";
   connected: boolean;
   refreshExpires: string | null;
   saved: Saved;
@@ -75,7 +75,13 @@ export function SettingsPanel(props: {
       {msg && <p className={msg.ok ? "ok" : "error"}>{msg.text}</p>}
 
       <section className="panel">
-        <h2>1. Connect eBay ({props.environment})</h2>
+        <h2>1. Connect eBay ({props.environment === "mock" ? "test mode" : props.environment})</h2>
+        {props.environment === "mock" && (
+          <p className="ok">
+            Test mode: eBay is simulated, so you can try uploads, Claude's drafts, review and publishing before eBay approves your developer account.
+            Categories are a small test set, there are no price comparisons, and nothing is sent to eBay.
+          </p>
+        )}
         {props.connected ? (
           <p>
             Connected.{" "}
@@ -104,7 +110,7 @@ export function SettingsPanel(props: {
           <button className="btn" disabled={!props.connected || busy !== null} onClick={loadPolicies}>
             Reload policies
           </button>
-          {props.environment === "sandbox" && (
+          {props.environment !== "production" && (
             <button
               className="btn"
               disabled={!props.connected || busy !== null}
@@ -115,11 +121,11 @@ export function SettingsPanel(props: {
                     await post("/api/ebay/starter-policies");
                     window.location.reload();
                   },
-                  "Created sandbox test policies.",
+                  "Created test policies.",
                 )
               }
             >
-              Create sandbox test policies
+              Create test policies
             </button>
           )}
         </div>

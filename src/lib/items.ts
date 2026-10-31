@@ -151,9 +151,11 @@ export async function saveDraftEdits(itemId: string, edit: DraftEdit) {
 export async function publishItem(itemId: string) {
   const loaded = await loadItem(itemId);
   if (!loaded) throw new Error("Item not found.");
-  const { item, photos, draft } = loaded;
+  const { item, photos, draft, listing } = loaded;
   if (!draft) throw new Error("Write a draft first.");
-  if (item.status === "listed") throw new Error("This item is already listed.");
+  // `listing` is for the current eBay environment only, so an item listed in
+  // test mode can still be listed for real later.
+  if (listing?.ebayListingId) throw new Error("This item is already listed.");
 
   const account = await getAccount();
   const e = env();

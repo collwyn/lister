@@ -1,4 +1,8 @@
-import { env } from "@/lib/env";
+import { env, isMockEbay } from "@/lib/env";
+import { EbayError, type EbayErrorItem } from "./errors";
+import { mockEbay } from "./mock";
+
+export { EbayError } from "./errors";
 
 export function ebayHosts() {
   const sandbox = env().EBAY_ENV === "sandbox";
@@ -8,39 +12,14 @@ export function ebayHosts() {
   };
 }
 
-type EbayErrorItem = {
-  errorId?: number;
-  message?: string;
-  longMessage?: string;
-  parameters?: { name?: string; value?: string }[];
-};
-
-/** An eBay API failure, with eBay's own wording kept for the review screen. */
-export class EbayError extends Error {
-  constructor(
-    public status: number,
-    public errors: EbayErrorItem[],
-    fallback: string,
-  ) {
-    super(EbayError.describe(errors) || fallback);
-    this.name = "EbayError";
-  }
-  static describe(errors: EbayErrorItem[]): string {
-    return errors
-      .map((e) => e.longMessage || e.message)
-      .filter(Boolean)
-      .join(" ");
-  }
-  hasErrorId(id: number) {
-    return this.errors.some((e) => e.errorId === id);
-  }
-}
-
 export async function ebayFetch<T>(
   path: string,
   token: string,
   init: { method?: string; body?: unknown; headers?: Record<string, string>; query?: Record<string, string | undefined> } = {},
 ): Promise<T> {
+  // Test mode: answer locally, so the rest of the app runs unchanged.
+  if (isMockEbay()) return mockEbay<T>(path, init);
+
   const url = new URL(path, ebayHosts().api);
   for (const [k, v] of Object.entries(init.query ?? {})) if (v !== undefined) url.searchParams.set(k, v);
 

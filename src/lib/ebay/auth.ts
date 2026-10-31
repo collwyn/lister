@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { decrypt, encrypt } from "@/lib/crypto";
-import { env } from "@/lib/env";
+import { ebayKeys, env, isMockEbay } from "@/lib/env";
 import { ebayHosts } from "./http";
 
 // Two kinds of eBay token:
@@ -27,8 +27,8 @@ type TokenResponse = {
 const memo = new Map<string, { token: string; expiresAt: number }>();
 
 function basicAuth() {
-  const e = env();
-  return "Basic " + Buffer.from(`${e.EBAY_CLIENT_ID}:${e.EBAY_CLIENT_SECRET}`).toString("base64");
+  const k = ebayKeys();
+  return "Basic " + Buffer.from(`${k.clientId}:${k.clientSecret}`).toString("base64");
 }
 
 async function tokenRequest(params: Record<string, string>): Promise<TokenResponse> {
@@ -51,6 +51,7 @@ function remember(key: string, t: TokenResponse) {
 }
 
 export async function appToken(): Promise<string> {
+  if (isMockEbay()) return "mock-app-token";
   const key = `app:${env().EBAY_ENV}`;
   const hit = memo.get(key);
   if (hit && hit.expiresAt > Date.now()) return hit.token;
@@ -58,10 +59,10 @@ export async function appToken(): Promise<string> {
 }
 
 export function consentUrl(state: string): string {
-  const e = env();
+  const k = ebayKeys();
   const url = new URL("/oauth2/authorize", ebayHosts().auth);
-  url.searchParams.set("client_id", e.EBAY_CLIENT_ID);
-  url.searchParams.set("redirect_uri", e.EBAY_RUNAME);
+  url.searchParams.set("client_id", k.clientId);
+  url.searchParams.set("redirect_uri", k.ruName);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
   // eBay expects spaces in the scope list as %20 (URLSearchParams would write "+").
@@ -70,18 +71,28 @@ export function consentUrl(state: string): string {
 
 /** Completes the consent flow: trades the one-time code for tokens and stores the refresh token. */
 export async function completeConsent(code: string) {
-  const e = env();
-  const t = await tokenRequest({ grant_type: "authorization_code", code, redirect_uri: e.EBAY_RUNAME });
+  const t = await tokenRequest({ grant_type: "authorization_code", code, redirect_uri: ebayKeys().ruName });
   if (!t.refresh_token) throw new Error("eBay did not return a refresh token.");
+  await storeRefreshToken(t.refresh_token, t.refresh_token_expires_in);
+  remember(`user:${env().EBAY_ENV}`, t);
+}
+
+/** Test mode: "connects" without leaving the app, so the rest of Settings can be tried. */
+export async function connectMock() {
+  if (!isMockEbay()) throw new Error("Only available in test mode.");
+  await storeRefreshToken("mock-refresh-token", 18 * 30 * 24 * 60 * 60);
+}
+
+async function storeRefreshToken(token: string, expiresInSeconds?: number) {
+  const e = env();
   const values = {
-    refreshTokenEnc: encrypt(t.refresh_token, e.ENCRYPTION_KEY),
-    refreshTokenExpires: t.refresh_token_expires_in ? new Date(Date.now() + t.refresh_token_expires_in * 1000) : null,
+    refreshTokenEnc: encrypt(token, e.ENCRYPTION_KEY),
+    refreshTokenExpires: expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null,
   };
   await db()
     .insert(schema.ebayAccount)
     .values({ environment: e.EBAY_ENV, ...values })
     .onConflictDoUpdate({ target: schema.ebayAccount.environment, set: values });
-  remember(`user:${e.EBAY_ENV}`, t);
 }
 
 export async function getAccount() {
@@ -104,6 +115,7 @@ export async function userToken(): Promise<string> {
 
   const account = await getAccount();
   if (!account?.refreshTokenEnc) throw new NotConnectedError();
+  if (isMockEbay()) return "mock-user-token";
   const refresh = decrypt(account.refreshTokenEnc, e.ENCRYPTION_KEY);
   return remember(key, await tokenRequest({ grant_type: "refresh_token", refresh_token: refresh, scope: USER_SCOPES.join(" ") }));
 }
