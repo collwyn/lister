@@ -33,3 +33,10 @@ describe("describeStorageError", () => {
     expect(err.message).not.toContain("secret-key-value");
   });
 });
+
+describe("describeStorageError hints", () => {
+  it("points at the display-name mistake on Access Denied", () => {
+    const err = describeStorageError({ name: "AccessDenied" }, { which: "public", bucket: "photobucket1", action: "save a listing photo", ownOriginalsKeys: false });
+    expect(err.message).toContain('use the "Bucket name" from Details');
+  });
+});

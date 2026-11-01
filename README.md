@@ -34,8 +34,8 @@ Follow steps 1, 3 and 4 below now; do step 2 when eBay approves you.
 1. **Database**: create a PostgreSQL database. Copy its *internal* connection URL (used by apps in the same Sevalla project).
 2. **Object storage**: create two buckets:
    - `listing-desk-originals`: leave **private**.
-   - `listing-desk-photos`: turn on **public access**. Its public URL looks like `https://listing-desk-photos.sevalla.storage`.
-   Any names work; put the real names in `S3_BUCKET_ORIGINALS` and `S3_BUCKET_PUBLIC`.
+   - `listing-desk-photos`: turn on **public access**. Copy its public address into `PUBLIC_PHOTO_BASE_URL`.
+   Any names work, but the variables need each bucket's **Bucket name** from Settings → Details, not the display name: Sevalla adds a short suffix (e.g. `listing-desk-photos-x7k2m`). Put those in `S3_BUCKET_ORIGINALS` and `S3_BUCKET_PUBLIC`.
    From the **public** bucket's connection details, copy the S3 endpoint, access key ID and secret key into `S3_ENDPOINT`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
    If the **private** bucket shows different values (Sevalla usually gives each bucket its own keys), copy them into `S3_ORIGINALS_ENDPOINT`, `S3_ORIGINALS_ACCESS_KEY_ID` and `S3_ORIGINALS_SECRET_ACCESS_KEY`.
 3. **Application**: create an app from this GitHub repo.

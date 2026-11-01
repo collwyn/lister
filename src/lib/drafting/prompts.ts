@@ -1,52 +1,69 @@
 import { z } from "zod";
 import type { CachedAspect, CachedCondition, Comp } from "@/db/schema";
 import type { CategorySuggestion } from "@/lib/ebay/taxonomy";
+import type { JsonSchema } from "./claude";
 
 // Prompts and output schemas for the three drafting calls:
 //   1. identify  (photos)        -> what the item is, search keywords, visible condition
 //   2. choose    (text only)     -> which eBay category, from eBay's own suggestions
 //   3. write     (photos + data) -> the full listing draft
-// Each call forces a tool so Claude's answer arrives as JSON; zod checks it.
+// Each answer comes back as JSON via structured outputs (`output_config.format`).
+// Structured-output schemas must close every object with additionalProperties:false
+// and can't use open-ended maps, so item specifics are a list of {name, values}.
+// Every field is required; "" or 0 means "unknown", and zod turns those into undefined.
 
 export const GROUP_TYPES = ["comics", "books", "magazines", "electronics", "household", "other"] as const;
 
-export const identifyTool = {
-  name: "record_identification",
-  description: "Record what the item in the photos is.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      groupType: { type: "string", enum: [...GROUP_TYPES] },
-      whatItIs: { type: "string", description: "Plain description, e.g. 'Sony WH-1000XM4 wireless headphones, black'." },
-      brand: { type: "string" },
-      model: { type: "string", description: "Model, part number, ISBN, issue number or edition, if visible." },
-      keywords: {
-        type: "string",
-        description: "An eBay search query (max 80 characters) a buyer would type to find this exact item.",
-      },
-      visibleCondition: { type: "string", description: "Condition as seen in the photos." },
-      flaws: { type: "array", items: { type: "string" }, description: "Each flaw visible in the photos." },
-      sizeClass: { type: "string", enum: ["media", "small", "medium", "large", "oversize"] },
-      estimatedWeightOz: { type: "number", description: "Packed shipping weight estimate in ounces." },
-      identificationConfidence: { type: "string", enum: ["low", "medium", "high"] },
-      notes: { type: "string", description: "Anything the seller should check, e.g. 'model number not visible'." },
-    },
-    required: ["groupType", "whatItIs", "keywords", "visibleCondition", "flaws", "sizeClass", "identificationConfidence"],
+const str = (description?: string) => (description ? { type: "string", description } : { type: "string" });
+const blankToUndefined = (s: string | undefined) => (s && s.trim() ? s.trim() : undefined);
+const zeroToUndefined = (n: number | undefined) => (typeof n === "number" && n > 0 ? n : undefined);
+
+export const identifyJsonSchema: JsonSchema = {
+  type: "object",
+  properties: {
+    groupType: { type: "string", enum: [...GROUP_TYPES] },
+    whatItIs: str("Plain description, e.g. 'Sony WH-1000XM4 wireless headphones, black'."),
+    brand: str("Brand or maker; empty string if not visible."),
+    model: str("Model, part number, ISBN, issue number or edition; empty string if not visible."),
+    keywords: str("An eBay search query (at most 80 characters) a buyer would type to find this exact item."),
+    visibleCondition: str("Condition as seen in the photos."),
+    flaws: { type: "array", items: { type: "string" }, description: "Each flaw visible in the photos; empty list if none." },
+    sizeClass: { type: "string", enum: ["media", "small", "medium", "large", "oversize"] },
+    estimatedWeightOz: { type: "number", description: "Packed shipping weight estimate in ounces; 0 if you can't estimate." },
+    identificationConfidence: { type: "string", enum: ["low", "medium", "high"] },
+    notes: str("Anything the seller should check, e.g. 'model number not visible'; empty string if nothing."),
   },
+  required: [
+    "groupType",
+    "whatItIs",
+    "brand",
+    "model",
+    "keywords",
+    "visibleCondition",
+    "flaws",
+    "sizeClass",
+    "estimatedWeightOz",
+    "identificationConfidence",
+    "notes",
+  ],
+  additionalProperties: false,
 };
 
+const lowerEnum = <T extends readonly [string, ...string[]]>(values: T, fallback: T[number]) =>
+  z.preprocess((v) => (typeof v === "string" ? v.toLowerCase() : v), z.enum(values)).catch(fallback);
+
 export const identificationSchema = z.object({
-  groupType: z.enum(GROUP_TYPES).catch("other"),
+  groupType: lowerEnum(GROUP_TYPES, "other"),
   whatItIs: z.string(),
-  brand: z.string().optional(),
-  model: z.string().optional(),
+  brand: z.string().optional().transform(blankToUndefined),
+  model: z.string().optional().transform(blankToUndefined),
   keywords: z.string().transform((s) => s.slice(0, 80)),
   visibleCondition: z.string(),
   flaws: z.array(z.string()).catch([]),
-  sizeClass: z.enum(["media", "small", "medium", "large", "oversize"]).catch("medium"),
-  estimatedWeightOz: z.number().positive().optional().catch(undefined),
-  identificationConfidence: z.enum(["low", "medium", "high"]).catch("low"),
-  notes: z.string().optional(),
+  sizeClass: lowerEnum(["media", "small", "medium", "large", "oversize"] as const, "medium"),
+  estimatedWeightOz: z.number().optional().catch(undefined).transform(zeroToUndefined),
+  identificationConfidence: lowerEnum(["low", "medium", "high"] as const, "low"),
+  notes: z.string().optional().transform(blankToUndefined),
 });
 export type Identification = z.infer<typeof identificationSchema>;
 
@@ -58,25 +75,24 @@ export function identifyPrompt(opts: { photoCount: number; notesToAi?: string | 
     "Describe condition honestly, listing every visible flaw. Buyers return items that are worse than described.",
     opts.tested ? `Seller says testing status is: ${opts.tested}.` : "",
     opts.notesToAi ? `Seller's note about this item: ${opts.notesToAi}` : "",
-    "Record your answer with the record_identification tool.",
   ]
     .filter(Boolean)
     .join("\n");
 }
 
-export const chooseCategoryTool = {
-  name: "choose_category",
-  description: "Pick the eBay category that best fits the item.",
-  input_schema: {
-    type: "object" as const,
+/** The answer may only name one of the categories eBay suggested. */
+export function chooseCategoryJsonSchema(suggestions: CategorySuggestion[]): JsonSchema {
+  return {
+    type: "object",
     properties: {
-      categoryId: { type: "string", description: "One of the categoryId values offered." },
+      categoryId: { type: "string", enum: suggestions.map((s) => s.categoryId), description: "The best-fitting categoryId." },
       confident: { type: "boolean", description: "False if two or more options fit about equally well." },
-      reason: { type: "string" },
+      reason: str("One short sentence."),
     },
-    required: ["categoryId", "confident"],
-  },
-};
+    required: ["categoryId", "confident", "reason"],
+    additionalProperties: false,
+  };
+}
 
 export const categoryChoiceSchema = z.object({
   categoryId: z.string(),
@@ -89,55 +105,86 @@ export function chooseCategoryPrompt(id: Identification, suggestions: CategorySu
     `Item: ${id.whatItIs}${id.brand ? ` (brand: ${id.brand})` : ""}${id.model ? ` (model/edition: ${id.model})` : ""}.`,
     "eBay suggested these categories:",
     ...suggestions.map((s) => `- ${s.categoryId}: ${s.path}`),
-    "Choose the single best one with the choose_category tool.",
+    "Choose the single best one.",
   ].join("\n");
 }
 
-export const writeTool = {
-  name: "write_listing",
-  description: "Write the complete eBay listing draft.",
-  input_schema: {
-    type: "object" as const,
+/** The listing schema; conditionId is limited to the category's allowed conditions. */
+export function writeJsonSchema(conditionIds: string[]): JsonSchema {
+  return {
+    type: "object",
     properties: {
-      title: {
-        type: "string",
-        description:
-          "Max 80 characters. Order: brand, model, key specs, condition note if useful. No ALL CAPS words, no emoji, no 'L@@K' or 'WOW'.",
-      },
-      description: {
-        type: "string",
-        description:
-          "Plain text. Short paragraphs separated by blank lines; bullet lines start with '- '. Cover: what it is, what's included, condition and every visible flaw, testing status. No shipping or return terms (eBay shows those).",
-      },
-      conditionId: { type: "string", description: "One conditionId from the allowed list." },
-      conditionNotes: { type: "string", description: "One or two sentences on condition for the condition field." },
+      title: str(
+        "At most 80 characters. Order: brand, model, key specs, condition note if useful. No ALL CAPS words, no emoji, no 'L@@K' or 'WOW'.",
+      ),
+      description: str(
+        "Plain text. Short paragraphs separated by blank lines; bullet lines start with '- '. Cover: what it is, what's included, condition and every visible flaw, testing status. No shipping or return terms (eBay shows those).",
+      ),
+      conditionId: conditionIds.length
+        ? { type: "string", enum: conditionIds, description: "The condition that fits this item." }
+        : str("The conditionId that fits this item."),
+      conditionNotes: str("One or two sentences on condition for the condition field."),
       aspects: {
-        type: "object",
+        type: "array",
         description:
-          "Item specifics: { aspect name: [value, ...] }. Use the exact aspect names given. For SELECTION_ONLY aspects use only listed values. Leave out anything you cannot see or reliably know.",
-        additionalProperties: { type: "array", items: { type: "string" } },
+          "Item specifics. Use the exact aspect names given. For 'pick from list' aspects use only listed values. Leave out anything you cannot see or reliably know.",
+        items: {
+          type: "object",
+          properties: { name: { type: "string" }, values: { type: "array", items: { type: "string" } } },
+          required: ["name", "values"],
+          additionalProperties: false,
+        },
       },
       price: { type: "number", description: "Suggested Buy It Now price in USD." },
       priceConfidence: { type: "string", enum: ["low", "medium", "high"] },
-      priceReasoning: { type: "string" },
-      weightOz: { type: "number", description: "Packed shipping weight estimate in ounces." },
-      notes: { type: "string", description: "What the seller should double-check before approving." },
+      priceReasoning: str("One or two sentences."),
+      weightOz: { type: "number", description: "Packed shipping weight estimate in ounces; 0 if you can't estimate." },
+      notes: str("What the seller should double-check before approving; empty string if nothing."),
     },
-    required: ["title", "description", "conditionId", "aspects", "price", "priceConfidence"],
-  },
-};
+    required: [
+      "title",
+      "description",
+      "conditionId",
+      "conditionNotes",
+      "aspects",
+      "price",
+      "priceConfidence",
+      "priceReasoning",
+      "weightOz",
+      "notes",
+    ],
+    additionalProperties: false,
+  };
+}
+
+/** Accepts item specifics as [{name, values}] (structured outputs) or a {name: values} map. */
+const aspectsSchema = z
+  .union([
+    z.array(z.object({ name: z.string(), values: z.array(z.coerce.string()) })),
+    z.record(z.array(z.coerce.string())),
+  ])
+  .transform((v): Record<string, string[]> => {
+    if (!Array.isArray(v)) return v;
+    const out: Record<string, string[]> = {};
+    for (const { name, values } of v) {
+      const key = name.trim();
+      if (key && values.length) out[key] = [...(out[key] ?? []), ...values];
+    }
+    return out;
+  })
+  .catch({});
 
 export const listingDraftSchema = z.object({
   title: z.string().transform((s) => s.trim().slice(0, 80)),
   description: z.string(),
   conditionId: z.string(),
-  conditionNotes: z.string().optional(),
-  aspects: z.record(z.array(z.coerce.string())).catch({}),
+  conditionNotes: z.string().optional().transform(blankToUndefined),
+  aspects: aspectsSchema,
   price: z.number().nonnegative(),
-  priceConfidence: z.enum(["low", "medium", "high"]).catch("low"),
-  priceReasoning: z.string().optional(),
-  weightOz: z.number().positive().optional().catch(undefined),
-  notes: z.string().optional(),
+  priceConfidence: lowerEnum(["low", "medium", "high"] as const, "low"),
+  priceReasoning: z.string().optional().transform(blankToUndefined),
+  weightOz: z.number().optional().catch(undefined).transform(zeroToUndefined),
+  notes: z.string().optional().transform(blankToUndefined),
 });
 export type ListingDraftOutput = z.infer<typeof listingDraftSchema>;
 
@@ -185,7 +232,6 @@ export function writePrompt(opts: {
     "",
     "Price to sell within a few weeks: usually a little under the median of comparable listings in similar condition, adjusted for this item's condition and completeness.",
     "Be accurate and specific. Never invent specs, accessories or test results you cannot see.",
-    "Record the draft with the write_listing tool.",
   ]
     .filter((l) => l !== "")
     .join("\n");

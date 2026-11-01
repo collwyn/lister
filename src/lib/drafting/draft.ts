@@ -4,18 +4,18 @@ import { getPublicBytes } from "@/lib/storage";
 import { categoryInfo, suggestCategories } from "@/lib/ebay/taxonomy";
 import { findComps, median } from "@/lib/ebay/browse";
 import { getAccount } from "@/lib/ebay/auth";
-import { callTool, type ImageInput } from "./claude";
+import { askStructured, type ImageInput } from "./claude";
 import { draftFlags } from "./flags";
 import {
   categoryChoiceSchema,
   chooseCategoryPrompt,
-  chooseCategoryTool,
+  chooseCategoryJsonSchema,
   identificationSchema,
   identifyPrompt,
-  identifyTool,
+  identifyJsonSchema,
   listingDraftSchema,
   writePrompt,
-  writeTool,
+  writeJsonSchema,
 } from "./prompts";
 
 const MAX_PHOTOS_TO_CLAUDE = 8;
@@ -46,12 +46,13 @@ export async function draftItem(itemId: string) {
     );
 
     // 1. Identify
-    const id = await callTool({
+    const id = await askStructured({
+      what: "identify the item",
       prompt: identifyPrompt({ photoCount: images.length, notesToAi: item.notesToAi, tested: item.tested }),
-      tool: identifyTool,
+      jsonSchema: identifyJsonSchema,
       schema: identificationSchema,
       images,
-      maxTokens: 1200,
+      maxTokens: 6000,
     });
 
     // 2. Category: eBay suggests from its full tree, Claude picks
@@ -60,11 +61,14 @@ export async function draftItem(itemId: string) {
     let chosen = suggestions[0];
     let categoryConfident = suggestions.length === 1;
     if (suggestions.length > 1) {
-      const choice = await callTool({
-        prompt: chooseCategoryPrompt(id, suggestions.slice(0, 6)),
-        tool: chooseCategoryTool,
+      const offered = suggestions.slice(0, 6);
+      const choice = await askStructured({
+        what: "choose the eBay category",
+        prompt: chooseCategoryPrompt(id, offered),
+        jsonSchema: chooseCategoryJsonSchema(offered),
         schema: categoryChoiceSchema,
-        maxTokens: 400,
+        maxTokens: 3000,
+        effort: "low",
       });
       chosen = suggestions.find((s) => s.categoryId === choice.categoryId) ?? suggestions[0];
       categoryConfident = choice.confident;
@@ -76,7 +80,8 @@ export async function draftItem(itemId: string) {
     const compMedian = median(comps.map((c) => c.price));
 
     // 4. Write
-    const out = await callTool({
+    const out = await askStructured({
+      what: "write the listing",
       prompt: writePrompt({
         id,
         categoryPath: info.namePath,
@@ -87,10 +92,10 @@ export async function draftItem(itemId: string) {
         notesToAi: item.notesToAi,
         tested: item.tested,
       }),
-      tool: writeTool,
+      jsonSchema: writeJsonSchema(info.conditions.map((c) => c.conditionId)),
       schema: listingDraftSchema,
       images,
-      maxTokens: 3000,
+      maxTokens: 12000,
     });
 
     const conditionId = info.conditions.some((c) => c.conditionId === out.conditionId)
