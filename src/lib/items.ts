@@ -110,6 +110,10 @@ export const draftEditSchema = z.object({
   quantity: z.number().int().min(1).max(999),
   shippingPolicyId: z.string().nullable(),
   weightOz: z.number().positive().nullable(),
+  dims: z
+    .object({ lengthIn: z.number().positive(), widthIn: z.number().positive(), heightIn: z.number().positive() })
+    .nullable()
+    .optional(),
 });
 export type DraftEdit = z.infer<typeof draftEditSchema>;
 
@@ -139,7 +143,7 @@ export async function saveDraftEdits(itemId: string, edit: DraftEdit) {
       comps: latest?.comps ?? [],
       shippingPolicyId: edit.shippingPolicyId,
       weightOz: edit.weightOz === null ? null : edit.weightOz.toFixed(2),
-      dims: latest?.dims ?? null,
+      dims: edit.dims === undefined ? (latest?.dims ?? null) : edit.dims,
       quantity: edit.quantity,
       aiNotes: latest?.aiNotes ?? null,
     })

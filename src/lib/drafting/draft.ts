@@ -111,6 +111,7 @@ export async function draftItem(itemId: string) {
       compCount: comps.length,
       tested: item.tested,
       weightEstimated: weightOz !== undefined,
+      sizeEstimated: out.packageIn !== undefined,
     });
 
     const [latest] = await db()
@@ -139,6 +140,7 @@ export async function draftItem(itemId: string) {
         comps,
         shippingPolicyId: account?.defaultShippingPolicyId ?? null,
         weightOz: weightOz ? weightOz.toFixed(2) : null,
+        dims: out.packageIn ?? null,
         aiNotes: [id.notes, out.notes, out.priceReasoning && `Price: ${out.priceReasoning}`].filter(Boolean).join("\n") || null,
       });
 

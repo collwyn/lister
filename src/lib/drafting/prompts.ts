@@ -139,6 +139,13 @@ export function writeJsonSchema(conditionIds: string[]): JsonSchema {
       priceConfidence: { type: "string", enum: ["low", "medium", "high"] },
       priceReasoning: str("One or two sentences."),
       weightOz: { type: "number", description: "Packed shipping weight estimate in ounces; 0 if you can't estimate." },
+      packageIn: {
+        type: "object",
+        description: "Estimated shipping box size in inches, item packed with padding (length >= width >= height); all 0 if you can't estimate.",
+        properties: { length: { type: "number" }, width: { type: "number" }, height: { type: "number" } },
+        required: ["length", "width", "height"],
+        additionalProperties: false,
+      },
       notes: str("What the seller should double-check before approving; empty string if nothing."),
     },
     required: [
@@ -151,6 +158,7 @@ export function writeJsonSchema(conditionIds: string[]): JsonSchema {
       "priceConfidence",
       "priceReasoning",
       "weightOz",
+      "packageIn",
       "notes",
     ],
     additionalProperties: false,
@@ -184,6 +192,15 @@ export const listingDraftSchema = z.object({
   priceConfidence: lowerEnum(["low", "medium", "high"] as const, "low"),
   priceReasoning: z.string().optional().transform(blankToUndefined),
   weightOz: z.number().optional().catch(undefined).transform(zeroToUndefined),
+  packageIn: z
+    .object({ length: z.number(), width: z.number(), height: z.number() })
+    .optional()
+    .catch(undefined)
+    .transform((p) =>
+      p && p.length > 0 && p.width > 0 && p.height > 0
+        ? { lengthIn: Math.ceil(p.length), widthIn: Math.ceil(p.width), heightIn: Math.ceil(p.height) }
+        : undefined,
+    ),
   notes: z.string().optional().transform(blankToUndefined),
 });
 export type ListingDraftOutput = z.infer<typeof listingDraftSchema>;

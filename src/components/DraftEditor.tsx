@@ -45,6 +45,9 @@ export function DraftEditor({
   const [quantity, setQuantity] = useState(String(draft?.quantity ?? 1));
   const [shippingPolicyId, setShippingPolicyId] = useState<string | null>(draft?.shippingPolicyId ?? defaultShippingPolicyId);
   const [weightOz, setWeightOz] = useState(draft?.weightOz ? String(Number(draft.weightOz)) : "");
+  const [dimL, setDimL] = useState(draft?.dims ? String(draft.dims.lengthIn) : "");
+  const [dimW, setDimW] = useState(draft?.dims ? String(draft.dims.widthIn) : "");
+  const [dimH, setDimH] = useState(draft?.dims ? String(draft.dims.heightIn) : "");
   const [tested, setTested] = useState<string>(item.tested ?? "");
   const [note, setNote] = useState(item.notesToAi ?? "");
 
@@ -117,7 +120,17 @@ export function DraftEditor({
       quantity: Math.max(1, Math.round(Number(quantity) || 1)),
       shippingPolicyId,
       weightOz: weightOz ? Number(weightOz) : null,
+      dims: dimsValue(),
     };
+  }
+
+  /** Box size: all three numbers, or none. */
+  function dimsValue() {
+    const nums = [dimL, dimW, dimH].map((v) => Number(v));
+    if (![dimL, dimW, dimH].some((v) => v.trim())) return null;
+    if (nums.some((n) => !(n > 0))) throw new Error("Enter all three box measurements in inches, or clear all three.");
+    const [lengthIn, widthIn, heightIn] = nums;
+    return { lengthIn, widthIn, heightIn };
   }
 
   async function save(): Promise<boolean> {
@@ -338,6 +351,21 @@ export function DraftEditor({
                     <input id="weight" inputMode="decimal" className="mono" value={weightOz} onChange={(e) => touch(setWeightOz)(e.target.value)} disabled={listed} />
                   </label>
                 </div>
+                <div className="grid3">
+                  <label className="field" htmlFor="dim-l">
+                    Box length (in)
+                    <input id="dim-l" inputMode="decimal" className="mono" value={dimL} onChange={(e) => touch(setDimL)(e.target.value)} disabled={listed} />
+                  </label>
+                  <label className="field" htmlFor="dim-w">
+                    Box width (in)
+                    <input id="dim-w" inputMode="decimal" className="mono" value={dimW} onChange={(e) => touch(setDimW)(e.target.value)} disabled={listed} />
+                  </label>
+                  <label className="field" htmlFor="dim-h">
+                    Box height (in)
+                    <input id="dim-h" inputMode="decimal" className="mono" value={dimH} onChange={(e) => touch(setDimH)(e.target.value)} disabled={listed} />
+                  </label>
+                </div>
+                <p className="muted small">Weight and box size are used by calculated-shipping policies; flat-rate and local-pickup policies ignore them. 1 lb = 16 oz.</p>
                 <PriceContext comps={comps} confidence={draft.priceConfidence} soldSearch={soldSearch} />
                 <label className="field" htmlFor="shipping">
                   Shipping policy

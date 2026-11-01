@@ -13,6 +13,7 @@ export function draftFlags(opts: {
   compCount: number;
   tested?: string | null;
   weightEstimated: boolean;
+  sizeEstimated?: boolean;
 }): string[] {
   const flags: string[] = [];
   const missing = missingRequiredAspects(opts.draft.aspects, opts.categoryAspects);
@@ -25,5 +26,6 @@ export function draftFlags(opts: {
     flags.push("Condition says for parts, but you marked it working");
   }
   if (opts.weightEstimated) flags.push("Weight is an estimate");
+  if (opts.sizeEstimated) flags.push("Box size is an estimate");
   return flags;
 }
