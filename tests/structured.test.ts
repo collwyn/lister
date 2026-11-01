@@ -127,3 +127,25 @@ describe("listing answers", () => {
     expect(out.conditionNotes).toBeUndefined();
   });
 });
+
+describe("box size", () => {
+  const base = {
+    title: "t", description: "d", conditionId: "3000", conditionNotes: "", aspects: [], price: 10,
+    priceConfidence: "low", priceReasoning: "", weightOz: 0, notes: "",
+  };
+  it("rounds Claude's estimate up to whole inches", () => {
+    expect(listingDraftSchema.parse({ ...base, packageIn: { length: 44.2, width: 16, height: 5.5 } }).packageIn).toEqual({
+      lengthIn: 45,
+      widthIn: 16,
+      heightIn: 6,
+    });
+  });
+  it("treats zeros as unknown", () => {
+    expect(listingDraftSchema.parse({ ...base, packageIn: { length: 0, width: 0, height: 0 } }).packageIn).toBeUndefined();
+  });
+  it("is part of the write schema", () => {
+    const s = writeJsonSchema(["3000"]) as any;
+    expect(s.required).toContain("packageIn");
+    expect(s.properties.packageIn.additionalProperties).toBe(false);
+  });
+});

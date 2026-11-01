@@ -121,3 +121,13 @@ describe("offerBody", () => {
     expect(offer.listingDescription).toContain("<ul>");
   });
 });
+
+describe("package size sent to eBay", () => {
+  it("includes weight and box dimensions in inches", () => {
+    const body = inventoryItemBody({ ...base, weightOz: 160, dims: { lengthIn: 44, widthIn: 16, heightIn: 6 } }) as Record<string, any>;
+    expect(body.packageWeightAndSize).toEqual({
+      weight: { value: 160, unit: "OUNCE" },
+      dimensions: { length: 44, width: 16, height: 6, unit: "INCH" },
+    });
+  });
+});
