@@ -92,10 +92,10 @@ export function describeStorageError(
   if (["AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "Forbidden", "Unauthorized"].includes(code)) {
     text =
       `The ${label} bucket "${ctx.bucket}" refused the app's keys (${code}) while trying to ${ctx.action}. ` +
-      `Check ${vars} in Sevalla: they must be this bucket's own values from its connection details, the keys need write access, ` +
-      `and the bucket name must match exactly.`;
+      `Check ${vars} in Sevalla (bucket Settings → Details and Access keys). The most common cause is using the display name: ` +
+      `use the "Bucket name" from Details, which ends in a short suffix (e.g. photos-x7k2m).`;
   } else if (code === "NoSuchBucket") {
-    text = `There is no bucket named "${ctx.bucket}" at that endpoint (${ctx.which} bucket). Copy the exact name from the bucket's connection details into ${
+    text = `There is no bucket named "${ctx.bucket}" at that endpoint (${ctx.which} bucket). Copy the "Bucket name" from the bucket's Settings → Details (not the display name) into ${
       ctx.which === "public" ? "S3_BUCKET_PUBLIC" : "S3_BUCKET_ORIGINALS"
     }.`;
   } else {
@@ -119,6 +119,9 @@ function bucket(which: Which) {
       region: c.region,
       forcePathStyle: true,
       credentials: { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey },
+      // Sevalla's docs (Cloudflare R2): only send/check checksums when an operation requires them.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     }),
   };
   clients.set(which, entry);
