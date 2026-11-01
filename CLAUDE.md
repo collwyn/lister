@@ -6,7 +6,7 @@ Personal eBay listing tool: photos → Claude draft → human review → publish
 
 - Next.js 15 App Router, TypeScript strict, React 19. Route handler `params` are Promises (`await ctx.params`).
 - Drizzle ORM + postgres.js. Schema in `src/db/schema.ts`; after editing it run `npm run db:generate` and commit the new file in `drizzle/`. Migrations run on start (`scripts/migrate.mjs`). Prisma was dropped because its engine binaries can't be downloaded in some build sandboxes.
-- `@anthropic-ai/sdk` with forced tool calls for structured output, validated by zod (`src/lib/drafting/`).
+- `@anthropic-ai/sdk` with structured outputs (`output_config.format`, JSON schema) validated by zod (`src/lib/drafting/`). Current models (Sonnet 5.5 and newer) reject forced `tool_choice` (`tool`/`any`), so don't use it. Structured-output schemas must set `additionalProperties: false` on every object, list every property in `required`, and avoid open-ended maps and numeric/length limits; `tests/structured.test.ts` checks this. These models think by default and thinking counts toward `max_tokens`.
 - `sharp` for resizing, `heic-convert` for iPhone photos.
 - Vitest for unit tests (`tests/`).
 
