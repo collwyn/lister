@@ -25,7 +25,12 @@ export type ListingInput = {
   dims?: Dims | null;
   marketplaceId: string;
   policies: { paymentPolicyId: string; returnPolicyId: string; fulfillmentPolicyId: string };
+  /** Inventory API: the saved inventory location's key. */
   merchantLocationKey: string;
+  /** Bumped each time a listing for this item is cleared as ended (duplicate guard). */
+  relist?: number;
+  /** Trading API: the ship-from address sent with the listing. */
+  shipFrom?: { postalCode: string; city?: string | null; stateOrProvince?: string | null } | null;
 };
 
 export function cleanAspects(aspects: Aspects): Aspects {
@@ -60,7 +65,8 @@ export function descriptionHtml(text: string): string {
     .join("\n");
 }
 
-export function validateListing(input: ListingInput): string[] {
+/** `needs` says which ship-from detail the publishing method uses. */
+export function validateListing(input: ListingInput, needs: "locationKey" | "postalCode" = "locationKey"): string[] {
   const problems: string[] = [];
   if (!input.title.trim()) problems.push("Add a title.");
   if (input.title.length > TITLE_MAX) problems.push(`Shorten the title to ${TITLE_MAX} characters.`);
@@ -73,7 +79,9 @@ export function validateListing(input: ListingInput): string[] {
   if (input.imageUrls.length > 24) problems.push("eBay allows at most 24 photos.");
   if (!input.policies.paymentPolicyId || !input.policies.returnPolicyId || !input.policies.fulfillmentPolicyId)
     problems.push("Pick payment, return and shipping policies in Settings.");
-  if (!input.merchantLocationKey) problems.push("Add your ship-from location in Settings.");
+  if (needs === "locationKey" && !input.merchantLocationKey) problems.push("Add your ship-from location in Settings.");
+  if (needs === "postalCode" && !input.shipFrom?.postalCode)
+    problems.push("Save your ship-from location in Settings again so the app has your ZIP code.");
   return problems;
 }
 

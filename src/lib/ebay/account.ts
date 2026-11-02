@@ -118,26 +118,35 @@ export type LocationInput = { name: string; city: string; stateOrProvince: strin
 
 export async function createLocation(input: LocationInput): Promise<string> {
   const key = "home";
-  try {
-    await ebayFetch(`/sell/inventory/v1/location/${key}`, await userToken(), {
-      method: "POST",
-      body: {
-        name: input.name,
-        location: {
-          address: {
-            city: input.city,
-            stateOrProvince: input.stateOrProvince,
-            postalCode: input.postalCode,
-            country: "US",
+  // The address itself is what the Trading API publisher sends with each listing.
+  await saveSettings({
+    postalCode: input.postalCode,
+    city: input.city,
+    stateOrProvince: input.stateOrProvince.toUpperCase(),
+  });
+  // Only the Inventory API publisher needs an eBay-side inventory location.
+  if (env().EBAY_PUBLISHER === "inventory") {
+    try {
+      await ebayFetch(`/sell/inventory/v1/location/${key}`, await userToken(), {
+        method: "POST",
+        body: {
+          name: input.name,
+          location: {
+            address: {
+              city: input.city,
+              stateOrProvince: input.stateOrProvince,
+              postalCode: input.postalCode,
+              country: "US",
+            },
           },
+          locationTypes: ["WAREHOUSE"],
+          merchantLocationStatus: "ENABLED",
         },
-        locationTypes: ["WAREHOUSE"],
-        merchantLocationStatus: "ENABLED",
-      },
-    });
-  } catch (err) {
-    // 25803: location already exists. Reuse it.
-    if (!(err instanceof EbayError && (err.hasErrorId(25803) || /already exists/i.test(err.message)))) throw err;
+      });
+    } catch (err) {
+      // 25803: location already exists. Reuse it.
+      if (!(err instanceof EbayError && (err.hasErrorId(25803) || /already exists/i.test(err.message)))) throw err;
+    }
   }
   await saveSettings({ locationKey: key });
   return key;
@@ -148,6 +157,9 @@ export async function saveSettings(values: {
   returnPolicyId?: string | null;
   defaultShippingPolicyId?: string | null;
   locationKey?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  stateOrProvince?: string | null;
 }) {
   const environment = env().EBAY_ENV;
   const existing = await db().select().from(schema.ebayAccount).where(eq(schema.ebayAccount.environment, environment));
