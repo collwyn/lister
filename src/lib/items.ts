@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -184,6 +184,10 @@ export async function publishItem(itemId: string) {
       fulfillmentPolicyId: draft.shippingPolicyId ?? account?.defaultShippingPolicyId ?? "",
     },
     merchantLocationKey: account?.locationKey ?? "",
+    relist: listing?.relistCount ?? 0,
+    shipFrom: account?.postalCode
+      ? { postalCode: account.postalCode, city: account.city, stateOrProvince: account.stateOrProvince }
+      : null,
   };
 
   const base = { itemId, sku, environment: e.EBAY_ENV, listPrice: input.price.toFixed(2) };
@@ -192,7 +196,7 @@ export async function publishItem(itemId: string) {
     const values = { ...base, offerId: result.offerId ?? null, ebayListingId: result.listingId, listedAt: new Date(), error: null };
     await db().insert(schema.listings).values(values).onConflictDoUpdate({ target: schema.listings.sku, set: values });
     await db().update(schema.items).set({ status: "listed", error: null }).where(eq(schema.items.id, itemId));
-    return { listingId: result.listingId, url: listingUrl(result.listingId, e.EBAY_ENV) };
+    return { listingId: result.listingId, url: listingUrl(result.listingId, e.EBAY_ENV), warnings: result.warnings ?? [] };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const values = { ...base, error: message };
@@ -200,4 +204,20 @@ export async function publishItem(itemId: string) {
     await db().update(schema.items).set({ error: message }).where(eq(schema.items.id, itemId));
     throw err;
   }
+}
+
+/**
+ * For a listing that has ended on eBay (you ended it in Seller Hub, or it sold
+ * out): forget it for the current eBay environment so the item can be listed
+ * again. Nothing is changed on eBay.
+ */
+export async function markListingEnded(itemId: string) {
+  const loaded = await loadItem(itemId);
+  if (!loaded) throw new Error("Item not found.");
+  if (!loaded.listing?.ebayListingId) throw new Error("This item has no current listing.");
+  await db()
+    .update(schema.listings)
+    .set({ ebayListingId: null, offerId: null, listedAt: null, error: null, relistCount: sql`${schema.listings.relistCount} + 1` })
+    .where(eq(schema.listings.id, loaded.listing.id));
+  await db().update(schema.items).set({ status: "needs_review" }).where(eq(schema.items.id, itemId));
 }

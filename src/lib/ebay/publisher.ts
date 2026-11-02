@@ -1,11 +1,17 @@
+import { env } from "@/lib/env";
 import { userToken } from "./auth";
 import { EbayError, ebayFetch } from "./http";
 import { inventoryItemBody, offerBody, validateListing, type ListingInput } from "./listing";
+import { tradingCall } from "./trading";
+import { addFixedPriceItemXml } from "./trading-xml";
 
-// Publishing sits behind one interface so the Phase 1 Seller Hub edit test can
-// swap the Inventory API for the Trading API (AddFixedPriceItem) in one file.
+// Publishing sits behind one interface. Two implementations:
+// - TradingApiPublisher (default): ordinary listings that Seller Hub can edit.
+// - InventoryApiPublisher: inventory-based listings; Seller Hub refuses to revise
+//   these ("Inventory-based listing management is not currently supported by this
+//   tool"), found in the Phase 1 test. Kept for reference; EBAY_PUBLISHER=inventory.
 
-export type PublishResult = { listingId: string; offerId?: string };
+export type PublishResult = { listingId: string; offerId?: string; warnings?: string[]; insertionFee?: number };
 
 export interface ListingPublisher {
   readonly name: string;
@@ -73,8 +79,43 @@ export class InventoryApiPublisher implements ListingPublisher {
   }
 }
 
+type TradingCaller = typeof tradingCall;
+
+/** eBay Trading API: one AddFixedPriceItem call creates an ordinary fixed-price listing. */
+export class TradingApiPublisher implements ListingPublisher {
+  readonly name = "trading-api";
+
+  constructor(
+    private call: TradingCaller = tradingCall,
+    private token: () => Promise<string> = userToken,
+  ) {}
+
+  private check(input: ListingInput) {
+    const problems = validateListing(input, "postalCode");
+    if (problems.length) throw new ListingValidationError(problems);
+  }
+
+  /** eBay's free dry run: reports what eBay would reject, and the fees, without listing anything. */
+  async verify(input: ListingInput): Promise<{ warnings: string[]; insertionFee?: number }> {
+    this.check(input);
+    const res = await this.call("VerifyAddFixedPriceItem", addFixedPriceItemXml(input, { verify: true }), await this.token());
+    return { warnings: res.warnings.map((w) => w.longMessage || w.message || "").filter(Boolean), insertionFee: res.insertionFee };
+  }
+
+  async publish(input: ListingInput): Promise<PublishResult> {
+    this.check(input);
+    const res = await this.call("AddFixedPriceItem", addFixedPriceItemXml(input), await this.token());
+    if (!res.itemId) throw new EbayError(500, [{ message: "eBay didn't return an item number for the new listing." }], "No ItemID.");
+    return {
+      listingId: res.itemId,
+      warnings: res.warnings.map((w) => w.longMessage || w.message || "").filter(Boolean),
+      insertionFee: res.insertionFee,
+    };
+  }
+}
+
 export function getPublisher(): ListingPublisher {
-  return new InventoryApiPublisher();
+  return env().EBAY_PUBLISHER === "inventory" ? new InventoryApiPublisher() : new TradingApiPublisher();
 }
 
 /** Link to the listing on eBay; null in test mode, where nothing is sent to eBay. */

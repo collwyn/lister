@@ -156,12 +156,25 @@ export function DraftEditor({
     setError(null);
     setNotice(null);
     try {
-      const res = await api<{ url: string | null; listingId: string }>(`/api/items/${item.id}/publish`, { method: "POST" });
+      const res = await api<{ url: string | null; listingId: string; warnings?: string[] }>(`/api/items/${item.id}/publish`, { method: "POST" });
       setNotice(res.url ? `Listed on eBay: ${res.url}` : `Test listing ${res.listingId} recorded. Test mode: nothing was sent to eBay.`);
+      if (res.warnings?.length) setError(`Listed, with eBay notes: ${res.warnings.join(" ")}`);
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function markEnded() {
+    setBusy("status");
+    setError(null);
+    try {
+      await api(`/api/items/${item.id}/ended`, { method: "POST" });
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
       setBusy(null);
     }
   }
@@ -222,6 +235,20 @@ export function DraftEditor({
             <>Test listing {listing?.ebayListingId} recorded. Test mode: nothing was sent to eBay.</>
           )}
         </p>
+      )}
+      {listed && (
+        <details>
+          <summary className="small">This listing has ended on eBay</summary>
+          <div className="row" style={{ marginTop: 8 }}>
+            <p className="muted small" style={{ flex: "1 1 320px" }}>
+              If you ended this listing in Seller Hub (or it was created before the switch to editable listings), clear it here so the item can be
+              reviewed and listed again. Nothing is changed on eBay.
+            </p>
+            <button className="btn" onClick={markEnded} disabled={busy !== null}>
+              Clear listing and edit again
+            </button>
+          </div>
+        </details>
       )}
 
       <div className="editor">

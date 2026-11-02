@@ -33,6 +33,9 @@ const schema = z.object({
   EBAY_CLIENT_SECRET: z.string().min(1).optional(),
   EBAY_RUNAME: z.string().min(1).optional(),
   EBAY_MARKETPLACE_ID: z.string().default("EBAY_US"),
+  // How listings are created. "trading" (default) makes ordinary listings Seller Hub
+  // can edit; "inventory" uses the Inventory API, which Seller Hub won't revise.
+  EBAY_PUBLISHER: z.enum(["trading", "inventory"]).default("trading"),
   EBAY_VERIFICATION_TOKEN: z.string().min(32).max(80).optional(),
 }).superRefine((v, ctx) => {
   if (v.EBAY_ENV === "mock") return;

@@ -21,6 +21,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           returnPolicyId: account?.returnPolicyId ?? null,
           defaultShippingPolicyId: account?.defaultShippingPolicyId ?? null,
           locationKey: account?.locationKey ?? null,
+          postalCode: account?.postalCode ?? null,
+          city: account?.city ?? null,
+          stateOrProvince: account?.stateOrProvince ?? null,
         }}
         deletionEndpoint={`${e.APP_BASE_URL}/api/ebay/account-deletion`}
         callbackUrl={`${e.APP_BASE_URL}/api/ebay/callback`}

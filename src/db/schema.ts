@@ -153,6 +153,9 @@ export const listings = pgTable("listings", {
   soldAt: timestamp("sold_at", { withTimezone: true }),
   soldPrice: numeric("sold_price", { precision: 10, scale: 2 }),
   error: text("error"),
+  // Times this item's listing was cleared as ended; part of the duplicate guard,
+  // so relisting the same item isn't mistaken for a repeat of the first request.
+  relistCount: integer("relist_count").notNull().default(0),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -166,6 +169,10 @@ export const ebayAccount = pgTable("ebay_account", {
   returnPolicyId: text("return_policy_id"),
   defaultShippingPolicyId: text("default_shipping_policy_id"),
   locationKey: text("location_key"),
+  // Ship-from address, sent with each listing by the Trading API publisher.
+  postalCode: text("postal_code"),
+  city: text("city"),
+  stateOrProvince: text("state_or_province"),
   dailyListingCap: integer("daily_listing_cap").notNull().default(20),
   updatedAt: updatedAt(),
 });

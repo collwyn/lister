@@ -5,7 +5,15 @@ import { api } from "@/lib/client-api";
 import { useEffect, useState } from "react";
 
 type Policy = { id: string; name: string };
-type Saved = { paymentPolicyId: string | null; returnPolicyId: string | null; defaultShippingPolicyId: string | null; locationKey: string | null };
+type Saved = {
+  paymentPolicyId: string | null;
+  returnPolicyId: string | null;
+  defaultShippingPolicyId: string | null;
+  locationKey: string | null;
+  postalCode: string | null;
+  city: string | null;
+  stateOrProvince: string | null;
+};
 
 const post = (url: string, body?: unknown) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
@@ -22,7 +30,12 @@ export function SettingsPanel(props: {
 }) {
   const [policies, setPolicies] = useState<{ payment: Policy[]; returns: Policy[]; shipping: Policy[] } | null>(null);
   const [choice, setChoice] = useState(props.saved);
-  const [loc, setLoc] = useState({ name: "Home", city: "", stateOrProvince: "", postalCode: "" });
+  const [loc, setLoc] = useState({
+    name: "Home",
+    city: props.saved.city ?? "",
+    stateOrProvince: props.saved.stateOrProvince ?? "",
+    postalCode: props.saved.postalCode ?? "",
+  });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(
     props.connectError ? { ok: false, text: props.connectError } : props.justConnected ? { ok: true, text: "eBay connected." } : null,
   );
@@ -157,7 +170,16 @@ export function SettingsPanel(props: {
 
       <section className="panel">
         <h2>3. Ship-from location</h2>
-        {props.saved.locationKey ? <p>Location saved.</p> : <p className="muted">eBay needs the city and ZIP code you ship from.</p>}
+        {props.saved.postalCode ? (
+          <p>
+            Saved: {[props.saved.city, props.saved.stateOrProvince].filter(Boolean).join(", ")} {props.saved.postalCode}. Buyers see this area, and it's
+            where local pickup happens.
+          </p>
+        ) : props.saved.locationKey ? (
+          <p className="error">Save your location again: listings now need the ZIP code stored with it.</p>
+        ) : (
+          <p className="muted">eBay needs the city and ZIP code you ship from. Buyers see this area, and it's where local pickup happens.</p>
+        )}
         <div className="grid3">
           <label className="field" htmlFor="city">
             City

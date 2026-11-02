@@ -78,13 +78,15 @@ Create an API key in the [Claude Console](https://platform.claude.com) and set `
 5. **New item** → upload a few photos of one item. Claude writes the draft (30–90 seconds).
 6. Review, edit, *Approve and list on eBay*. The confirmation links to the sandbox listing.
 
-### 5. The Phase 1 gate: can you edit API-created listings in Seller Hub?
+### 5. How listings are created (and the Phase 1 test)
 
-Listings created through eBay's Inventory API [can't be revised with the older Trading API](https://developer.ebay.com/develop/guides/sell/listing-management), and eBay doesn't document how well they edit in Seller Hub. Before listing for real:
+The Phase 1 test found that listings created through eBay's **Inventory API** can't be revised in Seller Hub ("Inventory-based listing management is not currently supported by this tool"). So the app now creates listings with eBay's **Trading API** (`AddFixedPriceItem`), which makes ordinary listings you can edit in Seller Hub like hand-made ones. `EBAY_PUBLISHER=inventory` switches back to the old method; leave it unset.
 
-1. Switch to production (below) and list one cheap item.
-2. In Seller Hub, change its price and description.
-3. If that works, carry on. If not, the publisher is swapped for a Trading API version in `src/lib/ebay/publisher.ts` (everything else stays the same).
+- **Ship-from ZIP:** Trading API listings carry your ZIP code. Open Settings and save your ship-from location once (again, if you saved it before this change).
+- **Duplicates:** each publish carries an ID eBay uses to reject repeats, so a double click or a timeout can't create two listings.
+- **Listings that end:** if you end a listing in Seller Hub, open the item and use **This listing has ended on eBay → Clear listing and edit again** to list it anew. Listings created before this change (Inventory API) should be ended in Seller Hub and relisted this way.
+
+Before listing for real, still list one inexpensive item in production and confirm you can change its price and description in Seller Hub.
 
 ### 6. Going to production
 
