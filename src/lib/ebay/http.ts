@@ -28,6 +28,9 @@ export async function ebayFetch<T>(
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      // Node's fetch sends "Accept-Language: *" unless told otherwise, and eBay's
+      // Inventory API rejects that ("Invalid value for header Accept-Language").
+      "Accept-Language": "en-US",
       "X-EBAY-C-MARKETPLACE-ID": env().EBAY_MARKETPLACE_ID,
       ...(init.body !== undefined ? { "Content-Type": "application/json", "Content-Language": "en-US" } : {}),
       ...init.headers,
