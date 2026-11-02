@@ -53,4 +53,16 @@ describe("eBay request headers", () => {
     await ebayFetch("/sell/account/v1/payment_policy", "token");
     expect(sent?.get("accept-language")).toBe("en-US");
   });
+
+  it("send it on eBay's token (sign-in) request too", async () => {
+    let sent: Headers | undefined;
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      sent = new Headers(init.headers);
+      return new Response(JSON.stringify({ access_token: "a", expires_in: 7200 }), { status: 200 });
+    });
+    vi.doMock("@/lib/db", () => ({ db: () => ({}), schema: {} }));
+    const { appToken } = await import("@/lib/ebay/auth");
+    await appToken();
+    expect(sent?.get("accept-language")).toBe("en-US");
+  });
 });
