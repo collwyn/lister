@@ -34,7 +34,12 @@ function basicAuth() {
 async function tokenRequest(params: Record<string, string>): Promise<TokenResponse> {
   const res = await fetch(`${ebayHosts().api}/identity/v1/oauth2/token`, {
     method: "POST",
-    headers: { Authorization: basicAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      Authorization: basicAuth(),
+      "Content-Type": "application/x-www-form-urlencoded",
+      // Same reason as ebayFetch: Node's fetch would otherwise send "Accept-Language: *".
+      "Accept-Language": "en-US",
+    },
     body: new URLSearchParams(params),
     cache: "no-store",
   });
