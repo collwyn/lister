@@ -7,6 +7,8 @@ import { processPhoto } from "@/lib/images";
 import { publicUrl, putOriginal, putPublic } from "@/lib/storage";
 import { getAccount } from "@/lib/ebay/auth";
 import { getPublisher, listingUrl } from "@/lib/ebay/publisher";
+import { endEbayListing } from "@/lib/ebay/end-listing";
+import { duplicateListingId } from "@/lib/ebay/trading-xml";
 import type { ListingInput } from "@/lib/ebay/listing";
 import type { Draft } from "@/db/schema";
 
@@ -76,6 +78,8 @@ export async function loadItem(id: string) {
     photos: photos.map((p) => ({ ...p, url: p.listingKey ? publicUrl(p.listingKey) : null })),
     draft: draft ?? null,
     listing: listing ? { ...listing, url: listing.ebayListingId ? listingUrl(listing.ebayListingId, listing.environment) : null } : null,
+    /** eBay refused the last publish because this listing is already up (duplicate-listing rule). */
+    blockingListingId: listing?.error ? duplicateListingId(listing.error) : null,
   };
 }
 
@@ -220,4 +224,29 @@ export async function markListingEnded(itemId: string) {
     .set({ ebayListingId: null, offerId: null, listedAt: null, error: null, relistCount: sql`${schema.listings.relistCount} + 1` })
     .where(eq(schema.listings.id, loaded.listing.id));
   await db().update(schema.items).set({ status: "needs_review" }).where(eq(schema.items.id, itemId));
+}
+
+/**
+ * Ends a listing on eBay for this item: either its current listing, or the
+ * older listing eBay named when it refused a relist as a duplicate. The eBay
+ * side checks the listing carries this item's SKU before ending it.
+ */
+export async function endListingOnEbay(itemId: string, listingId?: string) {
+  const loaded = await loadItem(itemId);
+  if (!loaded) throw new Error("Item not found.");
+  const current = loaded.listing?.ebayListingId ?? null;
+  const target = listingId ?? current;
+  if (!target) throw new Error("This item has no eBay listing to end.");
+  if (target !== current && target !== loaded.blockingListingId) throw new Error(`eBay listing ${target} isn't linked to this item.`);
+
+  const result = await endEbayListing({ listingId: target, sku: loaded.item.id, marketplaceId: env().EBAY_MARKETPLACE_ID });
+
+  if (target === current) {
+    await markListingEnded(itemId);
+  } else {
+    // The old listing that blocked the relist is gone: clear eBay's complaint.
+    await db().update(schema.listings).set({ error: null }).where(eq(schema.listings.id, loaded.listing!.id));
+    await db().update(schema.items).set({ error: null }).where(eq(schema.items.id, itemId));
+  }
+  return { listingId: target, ...result };
 }

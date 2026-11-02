@@ -14,7 +14,7 @@ const SITE_ID_US = "0";
 export async function tradingCall(callName: string, xml: string, token: string): Promise<TradingResult> {
   // Test mode: answer locally, like ebayFetch does for the REST APIs.
   const text = isMockEbay() ? await mockTrading(callName, xml) : await post(callName, xml, token);
-  const result = parseTradingResponse(text);
+  const result = { ...parseTradingResponse(text), raw: text };
 
   // eBay already processed this exact request: treat it as done, with the original listing.
   if (result.duplicateItemId) return { ...result, itemId: result.duplicateItemId, errors: [] };

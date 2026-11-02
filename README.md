@@ -84,7 +84,8 @@ The Phase 1 test found that listings created through eBay's **Inventory API** ca
 
 - **Ship-from ZIP:** Trading API listings carry your ZIP code. Open Settings and save your ship-from location once (again, if you saved it before this change).
 - **Duplicates:** each publish carries an ID eBay uses to reject repeats, so a double click or a timeout can't create two listings.
-- **Listings that end:** if you end a listing in Seller Hub, open the item and use **This listing has ended on eBay → Clear listing and edit again** to list it anew. Listings created before this change (Inventory API) should be ended in Seller Hub and relisted this way.
+- **Ending a listing:** open the item → **End this listing → End listing on eBay**. This works for both kinds of listing, including older Inventory API ones that Seller Hub can't end, and puts the item back in review. If you already ended it in Seller Hub, use **Clear listing and edit again** instead (that only updates the app).
+- **"You already have this item on eBay":** eBay refuses a second identical listing while the first is up. The review screen then offers **End listing … on eBay** for the earlier listing; press it, then approve and list again. The app only ends a listing after confirming on eBay that it carries this item's SKU.
 
 Before listing for real, still list one inexpensive item in production and confirm you can change its price and description in Seller Hub.
 

@@ -202,7 +202,7 @@ function byId(id: string | undefined | null) {
 // What the fake inventory remembers between calls, so publish can check the
 // listing the way eBay does (required item specifics, allowed condition).
 const items = new Map<string, { aspects: Record<string, string[]>; condition?: string }>();
-const offers = new Map<string, { sku: string; categoryId: string }>();
+const offers = new Map<string, { sku: string; categoryId: string; listingId?: string; status: "UNPUBLISHED" | "PUBLISHED" }>();
 
 const CONDITION_ENUM_TO_ID: Record<string, string> = {
   NEW: "1000",
@@ -299,17 +299,27 @@ export async function mockEbay<T>(path: string, init: Init = {}): Promise<T> {
     const existing = [...offers.entries()].find(([, o]) => o.sku === body.sku);
     if (existing) fail(400, 25002, "Offer entity already exists.");
     const offerId = `mock-offer-${offers.size + 1}`;
-    offers.set(offerId, { sku: body.sku, categoryId: body.categoryId });
+    offers.set(offerId, { sku: body.sku, categoryId: body.categoryId, status: "UNPUBLISHED" });
     return r({ offerId });
   }
   if (path === "/sell/inventory/v1/offer" && method === "GET") {
-    return r({ offers: [...offers.entries()].filter(([, o]) => o.sku === q.sku).map(([offerId]) => ({ offerId })) });
+    return r({
+      offers: [...offers.entries()]
+        .filter(([, o]) => o.sku === q.sku)
+        .map(([offerId, o]) => ({ offerId, sku: o.sku, status: o.status, ...(o.listingId ? { listing: { listingId: o.listingId } } : {}) })),
+    });
   }
-  const offerMatch = /^\/sell\/inventory\/v1\/offer\/([^/]+)(\/publish)?$/.exec(path);
+  const offerMatch = /^\/sell\/inventory\/v1\/offer\/([^/]+)(\/publish|\/withdraw)?$/.exec(path);
   if (offerMatch && method === "PUT") {
     const o = offers.get(offerMatch[1]) ?? fail(404, 25713, "Offer not found.");
     offers.set(offerMatch[1], { ...o, categoryId: body.categoryId ?? o.categoryId });
     return r(null);
+  }
+  if (offerMatch?.[2] === "/withdraw" && method === "POST") {
+    const o = offers.get(offerMatch[1]) ?? fail(404, 25713, "Offer not found.");
+    if (o.status !== "PUBLISHED") fail(400, 25713, "This offer isn't published.");
+    offers.set(offerMatch[1], { ...o, status: "UNPUBLISHED" });
+    return r({ listingId: o.listingId });
   }
   if (offerMatch?.[2] && method === "POST") {
     const o = offers.get(offerMatch[1]) ?? fail(404, 25713, "Offer not found.");
@@ -319,7 +329,9 @@ export async function mockEbay<T>(path: string, init: Init = {}): Promise<T> {
     if (missing.length) fail(400, 25021, `Item specifics ${missing.join(", ")} are required for this category.`);
     const conditionId = item.condition ? CONDITION_ENUM_TO_ID[item.condition] : undefined;
     if (!conditionId || !c.conditions.includes(conditionId)) fail(400, 25021, "The item condition is not valid for this category.");
-    return r({ listingId: `MOCK-${Date.now().toString().slice(-9)}` });
+    const listingId = `MOCK-${Date.now().toString().slice(-9)}`;
+    offers.set(offerMatch[1], { ...o, listingId, status: "PUBLISHED" });
+    return r({ listingId });
   }
 
   fail(501, 0, `Test mode doesn't handle ${method} ${path}`);

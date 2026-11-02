@@ -5,6 +5,7 @@ import { MOCK_CATEGORIES } from "./mock";
 // Nothing is sent to eBay.
 
 const created = new Map<string, string>(); // UUID -> ItemID
+const listings = new Map<string, { sku: string; active: boolean }>(); // ItemID -> listing
 
 const tagValue = (xml: string, name: string) => new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`).exec(xml)?.[1];
 
@@ -23,6 +24,18 @@ function failure(call: string, errors: { code: number; message: string }[], extr
 }
 
 export async function mockTrading(callName: string, xml: string): Promise<string> {
+  if (callName === "GetItem" || callName === "EndFixedPriceItem") {
+    const id = tagValue(xml, "ItemID") ?? "";
+    const listing = listings.get(id);
+    if (!listing) return failure(callName, [{ code: 17, message: "This item cannot be accessed because the listing has been deleted or you are not the seller." }]);
+    if (callName === "GetItem") {
+      const status = listing.active ? "Active" : "Completed";
+      return respond(callName, `<Ack>Success</Ack><Item><ItemID>${id}</ItemID><SKU>${listing.sku}</SKU><SellingStatus><ListingStatus>${status}</ListingStatus></SellingStatus></Item>`);
+    }
+    if (!listing.active) return failure(callName, [{ code: 1047, message: "The auction has already been closed." }]);
+    listing.active = false;
+    return respond(callName, `<Ack>Success</Ack><EndTime>${new Date().toISOString()}</EndTime>`);
+  }
   if (callName !== "AddFixedPriceItem" && callName !== "VerifyAddFixedPriceItem") {
     return failure(callName, [{ code: 2, message: `Test mode doesn't handle ${callName}` }]);
   }
@@ -62,5 +75,6 @@ export async function mockTrading(callName: string, xml: string): Promise<string
 
   const itemId = `11${Date.now().toString().slice(-10)}`;
   if (uuid) created.set(uuid, itemId);
+  listings.set(itemId, { sku: tagValue(item, "SKU") ?? "", active: true });
   return respond(callName, `<Ack>Success</Ack><ItemID>${itemId}</ItemID>${fees}`);
 }
