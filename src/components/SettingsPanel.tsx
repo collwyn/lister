@@ -1,16 +1,12 @@
 "use client";
 
+import { api } from "@/lib/client-api";
+
 import { useEffect, useState } from "react";
 
 type Policy = { id: string; name: string };
 type Saved = { paymentPolicyId: string | null; returnPolicyId: string | null; defaultShippingPolicyId: string | null; locationKey: string | null };
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-  return json as T;
-}
 const post = (url: string, body?: unknown) =>
   api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 
@@ -36,7 +32,10 @@ export function SettingsPanel(props: {
     try {
       setPolicies(await api("/api/ebay/policies"));
     } catch (e) {
-      setMsg({ ok: false, text: (e as Error).message });
+      setMsg({
+        ok: false,
+        text: `Couldn't load your eBay policies. ${(e as Error).message} If this account hasn't used business policies yet, click "Turn on business policies" below, then "Reload policies".`,
+      });
     }
   }
   useEffect(() => {

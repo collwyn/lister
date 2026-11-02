@@ -26,7 +26,9 @@ export function errorResponse(err: unknown): Response {
     return NextResponse.json({ error: err.message }, { status: 409 });
   }
   if (err instanceof EbayError) {
-    return NextResponse.json({ error: `eBay: ${err.message}`, ebay: err.errors }, { status: 502 });
+    // Not 502: Sevalla's edge replaces 502/503/504 bodies with its own page, hiding eBay's message.
+    console.warn("eBay error", err.status, JSON.stringify(err.errors.map((e) => ({ errorId: e.errorId, message: e.message }))));
+    return NextResponse.json({ error: `eBay: ${err.message}`, ebay: err.errors }, { status: 422 });
   }
   console.error(err);
   const message = err instanceof Error ? err.message : "Something went wrong.";

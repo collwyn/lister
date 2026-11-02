@@ -1,5 +1,7 @@
 "use client";
 
+import { api } from "@/lib/client-api";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CachedAspect, CachedCondition, Comp } from "@/db/schema";
@@ -12,12 +14,6 @@ type Suggestion = { categoryId: string; name: string; path: string };
 
 const TITLE_MAX = 80;
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-  return json as T;
-}
 
 export function DraftEditor({
   initial,
