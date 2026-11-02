@@ -27,7 +27,7 @@ export function DraftEditor({
   ebayConnected: boolean;
 }) {
   const router = useRouter();
-  const { item, photos, draft, listing } = initial;
+  const { item, photos, draft, listing, blockingListingId } = initial;
 
   // ---- editable state (seeded from the latest draft) ----
   const [title, setTitle] = useState(draft?.title ?? "");
@@ -52,6 +52,7 @@ export function DraftEditor({
   const [busy, setBusy] = useState<null | "draft" | "save" | "publish" | "status">(null);
   const [error, setError] = useState<string | null>(item.status === "failed" || listing?.error ? item.error : null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [dirty, setDirty] = useState(false);
   const touch = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
@@ -162,6 +163,7 @@ export function DraftEditor({
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
+      router.refresh(); // shows the "end the earlier listing" option if eBay called this a duplicate
     } finally {
       setBusy(null);
     }
@@ -175,6 +177,30 @@ export function DraftEditor({
       window.location.reload();
     } catch (e) {
       setError((e as Error).message);
+      setBusy(null);
+    }
+  }
+
+  /** Ends the listing on eBay itself: this item's current listing, or the older one blocking a relist. */
+  async function endOnEbay(listingId?: string) {
+    setBusy("status");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await api<{ listingId: string; alreadyEnded: boolean }>(`/api/items/${item.id}/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(listingId ? { listingId } : {}),
+      });
+      setNotice(
+        `${res.alreadyEnded ? `eBay listing ${res.listingId} had already ended.` : `Ended eBay listing ${res.listingId}.`} ` +
+          (listingId ? "You can now approve and list this item again." : "The item is back in review, ready to list again."),
+      );
+      setConfirmEnd(false);
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
       setBusy(null);
     }
   }
@@ -238,17 +264,35 @@ export function DraftEditor({
       )}
       {listed && (
         <details>
-          <summary className="small">This listing has ended on eBay</summary>
+          <summary className="small">End this listing</summary>
           <div className="row" style={{ marginTop: 8 }}>
             <p className="muted small" style={{ flex: "1 1 320px" }}>
-              If you ended this listing in Seller Hub (or it was created before the switch to editable listings), clear it here so the item can be
-              reviewed and listed again. Nothing is changed on eBay.
+              <strong>End listing on eBay</strong> takes it off eBay now and puts the item back in review, so you can edit and list it again.
+            </p>
+            <button className={confirmEnd ? "btn danger" : "btn"} onClick={() => (confirmEnd ? endOnEbay() : setConfirmEnd(true))} disabled={busy !== null}>
+              {busy === "status" ? "Ending…" : confirmEnd ? "Yes, end it on eBay" : "End listing on eBay"}
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <p className="muted small" style={{ flex: "1 1 320px" }}>
+              Already ended it in Seller Hub? <strong>Clear listing</strong> only updates the app; nothing is changed on eBay.
             </p>
             <button className="btn" onClick={markEnded} disabled={busy !== null}>
               Clear listing and edit again
             </button>
           </div>
         </details>
+      )}
+      {!listed && blockingListingId && !notice && (
+        <div className="panel">
+          <p style={{ marginTop: 0 }}>
+            eBay won&apos;t list this again while your earlier listing <strong>{blockingListingId}</strong> for this item is still up. End that one on eBay,
+            then press <strong>Approve and list on eBay</strong> again.
+          </p>
+          <button className="btn primary" onClick={() => endOnEbay(blockingListingId)} disabled={busy !== null}>
+            {busy === "status" ? "Ending…" : `End listing ${blockingListingId} on eBay`}
+          </button>
+        </div>
       )}
 
       <div className="editor">

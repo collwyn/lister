@@ -117,6 +117,8 @@ export type TradingResult = {
   /** When eBay recognises a resent UUID: the ItemID the first request created. */
   duplicateItemId?: string;
   insertionFee?: number;
+  /** The whole response, for calls with their own parser (GetItem). */
+  raw?: string;
 };
 
 function tag(xml: string, name: string): string | undefined {
@@ -150,4 +152,45 @@ export function parseTradingResponse(xml: string): TradingResult {
     duplicateItemId: dup ? tag(dup, "InvocationTrackingID") : undefined,
     insertionFee,
   };
+}
+
+// ---- Ending a listing (GetItem to check it, EndFixedPriceItem to end it) ----
+
+/** Asks only for what the app needs to confirm a listing is this item's: its SKU and status. */
+export function getItemXml(itemId: string): string {
+  return (
+    `<?xml version="1.0" encoding="utf-8"?>` +
+    `<GetItemRequest xmlns="${NS}">` +
+    "<ErrorLanguage>en_US</ErrorLanguage>" +
+    el("ItemID", itemId) +
+    "<OutputSelector>Item.ItemID</OutputSelector><OutputSelector>Item.SKU</OutputSelector>" +
+    "<OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>" +
+    `</GetItemRequest>`
+  );
+}
+
+export function parseGetItem(xml: string): { sku?: string; listingStatus?: string } {
+  return { sku: tag(xml, "SKU"), listingStatus: tag(xml, "ListingStatus") };
+}
+
+/** "NotAvailable" is eBay's ending reason for an item that is no longer for sale this way. */
+export function endFixedPriceItemXml(itemId: string): string {
+  return (
+    `<?xml version="1.0" encoding="utf-8"?>` +
+    `<EndFixedPriceItemRequest xmlns="${NS}">` +
+    "<ErrorLanguage>en_US</ErrorLanguage>" +
+    el("ItemID", itemId) +
+    el("EndingReason", "NotAvailable") +
+    `</EndFixedPriceItemRequest>`
+  );
+}
+
+/**
+ * eBay's duplicate-listing rejection names the listing that's already up, e.g.
+ * "It looks like this listing is for an item you already have on eBay: <title> (110591498168)."
+ * Returns that item number, or null when the message is about something else.
+ */
+export function duplicateListingId(message: string | null | undefined): string | null {
+  if (!message || !/already have on eBay/i.test(message)) return null;
+  return /\((\d{9,15})\)/.exec(message)?.[1] ?? null;
 }
