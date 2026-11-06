@@ -8,6 +8,7 @@ import {
   listingDraftSchema,
   writeJsonSchema,
 } from "@/lib/drafting/prompts";
+import { colorDividerJsonSchema, groupingJsonSchema } from "@/lib/grouping/check";
 
 /** Checks the structured-outputs rules from Anthropic's docs on every object in a schema. */
 function structuredOutputProblems(schema: any, path = "$"): string[] {
@@ -38,6 +39,8 @@ describe("structured-output schemas follow the API's rules", () => {
   it("identify", () => expect(structuredOutputProblems(identifyJsonSchema)).toEqual([]));
   it("choose category", () => expect(structuredOutputProblems(chooseCategoryJsonSchema(suggestions))).toEqual([]));
   it("write listing", () => expect(structuredOutputProblems(writeJsonSchema(["1000", "3000"]))).toEqual([]));
+  it("group photos", () => expect(structuredOutputProblems(groupingJsonSchema)).toEqual([]));
+  it("confirm orange dividers", () => expect(structuredOutputProblems(colorDividerJsonSchema)).toEqual([]));
 
   it("limits the category to eBay's suggestions and the condition to the category's", () => {
     expect((chooseCategoryJsonSchema(suggestions) as any).properties.categoryId.enum).toEqual(["33034", "47067"]);

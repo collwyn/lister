@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listItems } from "@/lib/items";
+import { activeUploads } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
 
@@ -15,22 +16,47 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "Draft failed",
 };
 
+const BATCH_STATUS: Record<string, string> = {
+  uploading: "Uploading: add more photos or sort into items",
+  grouping: "Sorting into items…",
+  grouped: "Check the groups, then start drafting",
+  confirmed: "Drafting in the background",
+};
+
 export default async function ItemsPage() {
-  const items = await listItems();
+  const [items, batches] = await Promise.all([listItems(), activeUploads()]);
   return (
     <main className="wrap">
       <div className="spread">
         <h1>Items</h1>
-        <Link href="/items/new" className="btn primary">
-          New item
+        <Link href="/uploads/new" className="btn primary">
+          Add photos
         </Link>
       </div>
-      {items.length === 0 ? (
+      {batches.length > 0 && (
+        <div className="items">
+          {batches.map((b) => (
+            <Link key={b.id} href={`/uploads/${b.id}`} className="itemrow batchrow">
+              <span className="thumb" />
+              <div style={{ minWidth: 0 }}>
+                <div className="title">Batch of {b.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                <div className="muted small">
+                  {BATCH_STATUS[b.status] ?? b.status}
+                  {b.status === "confirmed" && ` · ${b.items - b.waiting} of ${b.items} drafted`}
+                  {b.failed > 0 && ` · ${b.failed} failed`}
+                </div>
+              </div>
+              <span className="pill">{b.photoCount} photos</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      {items.length === 0 && batches.length === 0 ? (
         <div className="panel empty">
           <h2>No items yet</h2>
-          <p className="muted">Add photos of one item. Claude writes the draft; you review it and publish to eBay.</p>
-          <Link href="/items/new" className="btn primary">
-            Add your first item
+          <p className="muted">Upload photos of your items. Claude sorts and drafts them; you review each one and publish to eBay.</p>
+          <Link href="/uploads/new" className="btn primary">
+            Add photos
           </Link>
         </div>
       ) : (

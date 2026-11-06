@@ -8,7 +8,12 @@ function anthropic() {
   return client;
 }
 
-export type ImageInput = { data: Buffer; mediaType: "image/jpeg" | "image/png" | "image/webp" };
+export type ImageInput = {
+  data: Buffer;
+  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  /** Optional caption sent just before the image, e.g. "Photo 3". */
+  label?: string;
+};
 
 export type JsonSchema = { [key: string]: unknown };
 
@@ -73,12 +78,10 @@ export async function askStructured<S extends z.ZodTypeAny>(opts: {
   effort?: "low" | "medium" | "high";
 }): Promise<z.infer<S>> {
   const content: Anthropic.Messages.ContentBlockParam[] = [
-    ...(opts.images ?? []).map(
-      (img): Anthropic.Messages.ImageBlockParam => ({
-        type: "image",
-        source: { type: "base64", media_type: img.mediaType, data: img.data.toString("base64") },
-      }),
-    ),
+    ...(opts.images ?? []).flatMap((img): Anthropic.Messages.ContentBlockParam[] => [
+      ...(img.label ? [{ type: "text" as const, text: img.label }] : []),
+      { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data.toString("base64") } },
+    ]),
     { type: "text", text: opts.prompt },
   ];
 

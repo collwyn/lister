@@ -21,6 +21,8 @@ Personal eBay listing tool: photos → Claude draft → human review → publish
 - Test mode (`EBAY_ENV=mock`): `ebayFetch` hands every call to `mockEbay`, so app code never branches on mock mode except for sign-in (`auth.ts`, connect route) and listing links. Trading API calls go through `tradingCall` (`src/lib/ebay/trading.ts`), which hands them to `mockTrading` (`src/lib/ebay/mock-trading.ts`) in test mode. When adding a new eBay call, add it to the matching mock too, or test mode will answer "Test mode doesn't handle …".
 - Ending listings goes through `endEbayListing` (`src/lib/ebay/end-listing.ts`): Inventory API offers are withdrawn, Trading API items ended with `EndFixedPriceItem`. It must confirm the listing's SKU is the item's id before ending anything.
 - Condition default: items are used and in working order unless the seller sets "Working order" otherwise (`items.tested` null means works; see `conditionRule` in `src/lib/drafting/prompts.ts`). Never default to "For parts or not working". A condition picked on the review screen is kept when redrafting.
+- Batches (`src/lib/uploads.ts`): photos upload one per request (idempotent per file via `photos.client_key`), get a capture time (`src/lib/grouping/capture-time.ts`: EXIF, then Galaxy/Android file names, then the browser's modified time) and a divider check (`divider.ts`: QR `LISTING-DESK:NEXT-ITEM` on the printable card in `public/divider-card.svg`, or mostly-orange, which Claude confirms). `group.ts` is pure and tested; Claude (`check.ts`, small thumbnails) only sees uncertain groups. Items of a batch stay `grouped` and off the items page until the seller confirms the groups.
+- Background drafting (`src/lib/worker.ts`) runs inside the web process, started by `src/instrumentation.ts`, so Sevalla needs no worker process. It claims items with `FOR UPDATE SKIP LOCKED`, re-queues items stuck in `drafting` for 15 minutes and fails them after 3 attempts. `DRAFT_CONCURRENCY=0` turns it off.
 - Every listing passes human review. Don't add auto-publish paths.
 - API errors reach the UI as `{ error }` with a readable message (`src/lib/api.ts`).
 
@@ -32,5 +34,5 @@ npm test && npm run typecheck && npm run build
 
 ## Roadmap (from the spec)
 
-- Phase 2: presigned direct uploads, folder upload, grouping by divider card / time gaps, background worker using the Message Batches API, review queue with keyboard shortcuts and bulk approve, drip-feed publishing.
+- Phase 2: done: batch and folder upload, grouping, background drafting. Next: review queue with keyboard shortcuts and bulk approve; cheaper drafting through the Message Batches API; "Ready to list" tray with drip-feed publishing. (Photos go through the app rather than presigned URLs: the server needs the bytes to resize anyway, and it avoids CORS setup on Sevalla buckets.)
 - Phase 3: Slab or Sell grading check for comics, lot suggestions, sold sync (Fulfillment API), price drops, Facebook Marketplace export.

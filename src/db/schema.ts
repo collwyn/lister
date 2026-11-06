@@ -42,7 +42,10 @@ export const uploads = pgTable("uploads", {
   id: id(),
   createdAt: createdAt(),
   photoCount: integer("photo_count").notNull().default(0),
+  // open (Phase 1 single item) | uploading | grouping | grouped (check the groups) | confirmed (drafting in the background)
   status: text("status").notNull().default("open"),
+  groupingError: text("grouping_error"),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
 });
 
 export const items = pgTable(
@@ -55,9 +58,13 @@ export const items = pgTable(
     groupType: text("group_type"), // comics, books, magazines, electronics, household, other
     status: itemStatus("status").notNull().default("grouped"),
     flags: jsonb("flags").$type<string[]>().notNull().default([]),
-    tested: text("tested"), // electronics: works | not_working | untested
+    tested: text("tested"), // works (default when null) | not_working | untested
     notesToAi: text("notes_to_ai"),
     error: text("error"),
+    // Why the grouping step thinks this group needs a look, or that Claude checked it.
+    groupNote: text("group_note"),
+    // Background drafting tries an item at most three times.
+    draftAttempts: integer("draft_attempts").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -74,15 +81,24 @@ export const photos = pgTable(
     itemId: text("item_id").references(() => items.id, { onDelete: "set null" }),
     originalKey: text("original_key").notNull(), // private bucket
     listingKey: text("listing_key"), // public bucket, resized JPEG
+    thumbKey: text("thumb_key"), // public bucket, small JPEG for the grouping screen
     fileName: text("file_name").notNull(),
     width: integer("width"),
     height: integer("height"),
     takenAt: timestamp("taken_at", { withTimezone: true }),
     position: integer("position").notNull().default(0),
     isDivider: boolean("is_divider").notNull().default(false),
+    dividerSource: text("divider_source"), // qr | color | color-ok | claude | manual
+    captureSource: text("capture_source"), // exif | filename | modified | none
+    // Order the files were chosen in; `position` is the order within the item.
+    pickOrder: integer("pick_order").notNull().default(0),
+    // name|size|lastModified from the browser: re-sending a file to the same upload is a no-op.
+    clientKey: text("client_key"),
+    // Left out of every item on the grouping screen (blurry, accidental).
+    excluded: boolean("excluded").notNull().default(false),
     createdAt: createdAt(),
   },
-  (t) => [index("photos_item_idx").on(t.itemId)],
+  (t) => [index("photos_item_idx").on(t.itemId), uniqueIndex("photos_upload_client_key_idx").on(t.uploadId, t.clientKey)],
 );
 
 export type Aspects = Record<string, string[]>;

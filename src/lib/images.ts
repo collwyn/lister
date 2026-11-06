@@ -39,6 +39,16 @@ export async function processPhoto(input: Buffer, fileName: string, mimeType: st
   return { listing: data, width: info.width, height: info.height, takenAt };
 }
 
+export const THUMB_LONG_EDGE = 360;
+
+/** Small JPEG for screens that show many photos at once. */
+export async function makeThumb(listingJpeg: Buffer): Promise<Buffer> {
+  return sharp(listingJpeg)
+    .resize({ width: THUMB_LONG_EDGE, height: THUMB_LONG_EDGE, fit: "inside" })
+    .jpeg({ quality: 72, mozjpeg: true })
+    .toBuffer();
+}
+
 /** Pulls DateTimeOriginal out of a raw EXIF block without a full EXIF parser. */
 export function exifDate(exif: Buffer | undefined): Date | null {
   if (!exif) return null;
