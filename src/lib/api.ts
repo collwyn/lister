@@ -4,6 +4,7 @@ import { NotConnectedError } from "@/lib/ebay/auth";
 import { EbayError } from "@/lib/ebay/http";
 import { ListingValidationError } from "@/lib/ebay/publisher";
 import { NotThisItemsListingError } from "@/lib/ebay/end-listing";
+import { UploadStateError } from "@/lib/uploads";
 
 /** Wraps a route handler so every failure returns { error } with a readable message. */
 export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response>) {
@@ -22,6 +23,9 @@ export function errorResponse(err: unknown): Response {
   }
   if (err instanceof ZodError) {
     return NextResponse.json({ error: err.issues.map((i) => i.message).join(" ") }, { status: 400 });
+  }
+  if (err instanceof UploadStateError) {
+    return NextResponse.json({ error: err.message }, { status: 409 });
   }
   if (err instanceof NotThisItemsListingError) {
     return NextResponse.json({ error: err.message }, { status: 409 });

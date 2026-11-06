@@ -8,7 +8,14 @@ Turn item photos into reviewed eBay listings:
 
 Runs on [Sevalla](https://sevalla.com): one Node app, a managed Postgres database, and two S3-compatible buckets.
 
-**Status: Phase 1** (one item end to end). Phase 2 adds folder uploads, photo grouping, background drafting and the fast review queue. See the build spec for the full plan.
+**Status: Phase 2 in progress.** Batch upload, photo grouping and background drafting are in; the fast review queue, cheaper batch drafting and the "Ready to list" tray come next. See the build spec for the full plan.
+
+## Batches: many items at once
+
+1. **Add photos** → choose any number of photos (or a whole folder on a computer). Photograph items one after another and take one photo of the **divider card** between items (Add photos → *Print a divider card*).
+2. The app sorts the photos by when they were taken (the photo's date stamp, else Galaxy/Android file names like `20261106_141523.jpg`), starts a new item at each divider card, and leaves the cards out. Without divider cards it groups by pauses between photos. Claude looks at any group that seems off (no dividers, a long pause, too many photos) and fixes the boundaries.
+3. **Check the groups:** tap a photo to start a new item from it, move it to the item before or after, make it the main photo, mark it as a divider or leave it out. Nothing is drafted until you press **Looks right: draft N items**.
+4. Items are drafted in the background (`DRAFT_CONCURRENCY`, default 2 at a time), then appear on the items page for review as before.
 
 ---
 
@@ -120,6 +127,9 @@ After changing `src/db/schema.ts`, run `npm run db:generate` to create a new SQL
 | `src/app/` | Pages (items, new item, item review, settings, login) and API routes |
 | `src/components/DraftEditor.tsx` | The review screen |
 | `src/lib/drafting/` | Claude prompts and the identify → category → write pipeline |
+| `src/lib/grouping/` | Capture times, divider-card detection, grouping rules, Claude's grouping check, grouping-screen edits |
+| `src/lib/uploads.ts` | Batch upload, grouping and confirm |
+| `src/lib/worker.ts` | Background drafting (started from `src/instrumentation.ts`) |
 | `src/lib/ebay/` | eBay auth, categories, comps, policies, listing bodies, publisher |
 | `src/lib/items.ts` | Upload, load, save edits, publish |
 | `src/db/schema.ts` | Database tables (Drizzle) |

@@ -15,6 +15,13 @@
       "when": 1793593363638,
       "tag": "0001_ship_from_and_relist",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793942317118,
+      "tag": "0002_batch_grouping",
+      "breakpoints": true
     }
   ]
 }

@@ -22,7 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </Link>
               <nav className="nav">
                 <Link href="/">Items</Link>
-                <Link href="/items/new">New item</Link>
+                <Link href="/uploads/new">Add photos</Link>
                 <Link href="/settings">Settings</Link>
               </nav>
               <span className={`env ${environment}`} title="eBay environment">

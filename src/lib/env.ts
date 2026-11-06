@@ -25,6 +25,8 @@ const schema = z.object({
 
   ANTHROPIC_API_KEY: z.string().min(1),
   CLAUDE_MODEL: z.string().optional(),
+  // How many items the background worker drafts at once; 0 turns background drafting off.
+  DRAFT_CONCURRENCY: z.coerce.number().int().min(0).max(6).default(2),
 
   // "mock" answers eBay calls locally (src/lib/ebay/mock.ts) so the app can be
   // tested before eBay approves a developer account. The keys below are then optional.

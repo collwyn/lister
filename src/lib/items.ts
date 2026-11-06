@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -84,7 +84,16 @@ export async function loadItem(id: string) {
 }
 
 export async function listItems() {
-  const rows = await db().select().from(schema.items).orderBy(desc(schema.items.createdAt)).limit(200);
+  // Items of a batch whose groups aren't confirmed yet are still tentative: they show on the batch page only.
+  const rows = (
+    await db()
+      .select({ item: schema.items })
+      .from(schema.items)
+      .innerJoin(schema.uploads, eq(schema.uploads.id, schema.items.uploadId))
+      .where(notInArray(schema.uploads.status, ["uploading", "grouping", "grouped"]))
+      .orderBy(desc(schema.items.createdAt))
+      .limit(500)
+  ).map((r) => r.item);
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const drafts = await db()
