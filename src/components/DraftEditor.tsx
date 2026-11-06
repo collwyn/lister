@@ -44,7 +44,8 @@ export function DraftEditor({
   const [dimL, setDimL] = useState(draft?.dims ? String(draft.dims.lengthIn) : "");
   const [dimW, setDimW] = useState(draft?.dims ? String(draft.dims.widthIn) : "");
   const [dimH, setDimH] = useState(draft?.dims ? String(draft.dims.heightIn) : "");
-  const [tested, setTested] = useState<string>(item.tested ?? "");
+  // Unset means the default: used and in working order.
+  const [tested, setTested] = useState<string>(item.tested ?? "works");
   const [note, setNote] = useState(item.notesToAi ?? "");
 
   const [category, setCategory] = useState<Category | null>(null);
@@ -79,6 +80,10 @@ export function DraftEditor({
   }, [ebayConnected]);
 
   // ---- actions ----
+  // Redrafting keeps a condition you picked, so the new description matches it.
+  const keepCondition = !!conditionId && !!draft && (conditionId !== draft.conditionId || draft.source === "edit");
+  const conditionChanged = !!conditionId && !!draft && conditionId !== draft.conditionId;
+
   const writeDraft = useCallback(async () => {
     setBusy("draft");
     setError(null);
@@ -87,14 +92,14 @@ export function DraftEditor({
       await api(`/api/items/${item.id}/draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tested: tested || null, notesToAi: note.trim() || null }),
+        body: JSON.stringify({ tested: tested || null, notesToAi: note.trim() || null, conditionId: keepCondition ? conditionId : null }),
       });
       window.location.href = `/items/${item.id}`;
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);
     }
-  }, [item.id, tested, note]);
+  }, [item.id, tested, note, keepCondition, conditionId]);
 
   const started = useRef(false);
   useEffect(() => {
@@ -359,7 +364,7 @@ export function DraftEditor({
                     </select>
                   </label>
                   <label className="field" htmlFor="tested">
-                    Tested? (electronics)
+                    Working order
                     <select
                       id="tested"
                       value={tested}
@@ -369,17 +374,27 @@ export function DraftEditor({
                         api(`/api/items/${item.id}`, {
                           method: "PATCH",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ tested: e.target.value || null }),
+                          body: JSON.stringify({ tested: e.target.value }),
                         }).catch((err) => setError((err as Error).message));
                       }}
                     >
-                      <option value="">Not applicable / not set</option>
-                      <option value="works">Tested, works</option>
-                      <option value="not_working">Tested, doesn't work</option>
+                      <option value="works">Used, works (default)</option>
+                      <option value="not_working">Doesn't work (for parts)</option>
                       <option value="untested">Not tested</option>
                     </select>
                   </label>
                 </div>
+                {conditionChanged && !listed && (
+                  <div className="row" style={{ gridColumn: "1 / -1" }}>
+                    <p className="muted small" style={{ flex: "1 1 320px", margin: 0 }}>
+                      The description and condition notes were written for the earlier condition. Rewrite the draft to match the new one (Claude rewrites the
+                      whole draft; your other unsaved edits are replaced).
+                    </p>
+                    <button className="btn" onClick={writeDraft} disabled={busy !== null}>
+                      {busy === "draft" ? "Rewriting…" : "Rewrite for this condition"}
+                    </button>
+                  </div>
+                )}
                 <label className="field" htmlFor="condnotes">
                   Condition notes
                   <input id="condnotes" value={conditionNotes} onChange={(e) => touch(setConditionNotes)(e.target.value)} disabled={listed} />
@@ -513,11 +528,10 @@ function RedraftFields({
     <div className="grid2">
       {!hideTested && (
         <label className="field" htmlFor="tested-pre">
-          If it's electronics: tested?
+          Working order
           <select id="tested-pre" value={tested} onChange={(e) => setTested(e.target.value)}>
-            <option value="">Not applicable / not set</option>
-            <option value="works">Tested, works</option>
-            <option value="not_working">Tested, doesn't work</option>
+            <option value="works">Used, works (default)</option>
+            <option value="not_working">Doesn't work (for parts)</option>
             <option value="untested">Not tested</option>
           </select>
         </label>

@@ -22,7 +22,7 @@ const id = identificationSchema.parse({
 });
 
 describe("draftFlags", () => {
-  it("flags missing required specifics, untested electronics and thin price data", () => {
+  it("flags missing required specifics and thin price data", () => {
     const flags = draftFlags({
       id,
       draft: { aspects: { Connectivity: ["Bluetooth"] }, priceConfidence: "medium", conditionId: "3000" },
@@ -35,22 +35,32 @@ describe("draftFlags", () => {
     expect(flags).toEqual([
       "Fill required item specifics: Brand",
       "Check the price",
-      "Confirm tested / works",
       "Weight is an estimate",
     ]);
   });
 
-  it("catches a 'for parts' condition on an item marked working", () => {
+  it("catches a 'for parts' condition on a working item, which is the default", () => {
     const flags = draftFlags({
       id,
       draft: { aspects: { Brand: ["Sony"] }, priceConfidence: "high", conditionId: "7000" },
       categoryAspects: aspects,
       categoryConfident: true,
       compCount: 12,
-      tested: "works",
+      tested: null,
       weightEstimated: false,
     });
-    expect(flags).toEqual(["Condition says for parts, but you marked it working"]);
+    expect(flags).toEqual(["Condition says for parts, but the item works"]);
+    expect(
+      draftFlags({
+        id,
+        draft: { aspects: { Brand: ["Sony"] }, priceConfidence: "high", conditionId: "7000" },
+        categoryAspects: aspects,
+        categoryConfident: true,
+        compCount: 12,
+        tested: "not_working",
+        weightEstimated: false,
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -77,7 +87,7 @@ describe("output schemas", () => {
 });
 
 describe("writePrompt", () => {
-  it("lists required specifics first and states the electronics rule", () => {
+  it("lists required specifics first and defaults to used and working", () => {
     const prompt = writePrompt({
       id,
       categoryPath: "Consumer Electronics > Headphones",
@@ -90,8 +100,26 @@ describe("writePrompt", () => {
       compMedian: 140,
     });
     expect(prompt.indexOf("- Brand [REQUIRED")).toBeLessThan(prompt.indexOf("- Connectivity"));
-    expect(prompt).toContain("Electronics rule");
+    expect(prompt).toContain("used and in working order");
+    expect(prompt).toContain("Never pick 'For parts or not working'");
+    expect(prompt).not.toContain("untested.");
     expect(prompt).toContain("Median: $140.00");
+  });
+
+  it("follows the seller's working-order status and a condition picked on the review screen", () => {
+    const base = {
+      id,
+      categoryPath: "Consumer Electronics > Headphones",
+      aspects,
+      conditions: [{ conditionId: "3000", conditionDescription: "Used" }],
+      comps: [],
+      compMedian: null,
+    };
+    expect(writePrompt({ ...base, tested: "not_working" })).toContain("Use 'For parts or not working' (7000)");
+    expect(writePrompt({ ...base, tested: "untested" })).toContain("it is untested");
+    const kept = writePrompt({ ...base, chosenCondition: { id: "4000", name: "Very Good" } });
+    expect(kept).toContain("the seller chose condition 4000 (Very Good). Use exactly that conditionId");
+    expect(kept).not.toContain("Never pick");
   });
 });
 

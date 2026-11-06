@@ -67,13 +67,39 @@ export const identificationSchema = z.object({
 });
 export type Identification = z.infer<typeof identificationSchema>;
 
+/** What the seller says about working order. Unset means the default: used and working. */
+export type Tested = "works" | "not_working" | "untested";
+export function effectiveTested(t: string | null | undefined): Tested {
+  return t === "not_working" || t === "untested" ? t : "works";
+}
+
+const TESTED_WORDS: Record<Tested, string> = {
+  works: "used and in working order",
+  not_working: "does not work (sell for parts or repair)",
+  untested: "not tested",
+};
+
+/** How the condition must be chosen and described, from the seller's working-order status. */
+export function conditionRule(tested: Tested, chosen?: { id: string; name: string } | null): string {
+  if (chosen) {
+    return `Condition rule: the seller chose condition ${chosen.id} (${chosen.name}). Use exactly that conditionId, and write the description and condition notes to match it.`;
+  }
+  if (tested === "not_working") {
+    return "Condition rule: the item does not work. Use 'For parts or not working' (7000) if allowed, and say so plainly in the description.";
+  }
+  if (tested === "untested") {
+    return "Condition rule: the item is used and was not tested. Pick the used condition that matches the visible wear, and say plainly in the description that it is untested.";
+  }
+  return "Condition rule: the item is used and in working order. Pick the used condition that matches the visible wear. Never pick 'For parts or not working', never call it untested or sold as-is, and don't pick a New condition unless the seller's note says it is new. Say in the description that it is in working order.";
+}
+
 export function identifyPrompt(opts: { photoCount: number; notesToAi?: string | null; tested?: string | null }) {
   return [
     `These ${opts.photoCount} photo${opts.photoCount === 1 ? "" : "s"} all show ONE item a seller wants to list on eBay (US).`,
     "Identify it as precisely as the photos allow: brand, model or part number, edition, issue number, ISBN.",
     "Only state what you can see or reliably infer. If a detail is not visible, say so in notes rather than guessing.",
     "Describe condition honestly, listing every visible flaw. Buyers return items that are worse than described.",
-    opts.tested ? `Seller says testing status is: ${opts.tested}.` : "",
+    `Seller says the item is ${TESTED_WORDS[effectiveTested(opts.tested)]}.`,
     opts.notesToAi ? `Seller's note about this item: ${opts.notesToAi}` : "",
   ]
     .filter(Boolean)
@@ -221,7 +247,10 @@ export function writePrompt(opts: {
   compMedian: number | null;
   notesToAi?: string | null;
   tested?: string | null;
+  /** The condition the seller picked on the review screen, kept when redrafting. */
+  chosenCondition?: { id: string; name: string } | null;
 }) {
+  const tested = effectiveTested(opts.tested);
   const aspects = [...opts.aspects]
     .sort((a, b) => Number(b.required) - Number(a.required) || (a.usage === "RECOMMENDED" ? -1 : 1))
     .slice(0, 45);
@@ -229,15 +258,13 @@ export function writePrompt(opts: {
   return [
     "Write an eBay (US) listing for the item in these photos.",
     `Identification: ${JSON.stringify(opts.id)}`,
-    opts.tested ? `Testing status from the seller: ${opts.tested}.` : "",
+    `The seller says the item is ${TESTED_WORDS[tested]}.`,
     opts.notesToAi ? `Seller's note: ${opts.notesToAi}` : "",
     `Category: ${opts.categoryPath}`,
     "",
     "Allowed conditions (use one conditionId):",
     ...opts.conditions.map((c) => `- ${c.conditionId}: ${c.conditionDescription}`),
-    opts.id.groupType === "electronics"
-      ? "Electronics rule: unless the seller says it was tested and works, use the 'For parts or not working' condition (7000) if allowed, and say it is untested."
-      : "",
+    conditionRule(tested, opts.chosenCondition),
     "",
     "Item specifics for this category:",
     ...aspects.map(aspectLine),
