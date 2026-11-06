@@ -14,6 +14,8 @@ type Ctx = { params: Promise<{ id: string }> };
 const redraftSchema = z.object({
   tested: z.enum(["works", "not_working", "untested"]).nullable().optional(),
   notesToAi: z.string().max(1000).nullable().optional(),
+  /** Keep this condition (picked on the review screen) in the new draft. */
+  conditionId: z.string().max(20).nullable().optional(),
 });
 
 // Ask Claude for a (new) draft. Optional note and testing status steer it.
@@ -21,10 +23,11 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   const { id } = await ctx.params;
   const text = await req.text();
   const body = redraftSchema.parse(text ? JSON.parse(text) : {});
-  if (body.tested !== undefined || body.notesToAi !== undefined) {
-    await db().update(schema.items).set(body).where(eq(schema.items.id, id));
+  const { conditionId, ...itemFields } = body;
+  if (itemFields.tested !== undefined || itemFields.notesToAi !== undefined) {
+    await db().update(schema.items).set(itemFields).where(eq(schema.items.id, id));
   }
-  await draftItem(id);
+  await draftItem(id, { conditionId });
   return NextResponse.json({ ok: true });
 });
 

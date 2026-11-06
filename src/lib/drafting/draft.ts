@@ -26,7 +26,7 @@ const MAX_PHOTOS_TO_CLAUDE = 8;
  * category specifics, conditions and price comps -> write the listing.
  * Phase 1 runs this inline when you press "Write draft"; Phase 2 moves it to the worker.
  */
-export async function draftItem(itemId: string) {
+export async function draftItem(itemId: string, opts: { conditionId?: string | null } = {}) {
   const [item] = await db().select().from(schema.items).where(eq(schema.items.id, itemId));
   if (!item) throw new Error("Item not found.");
 
@@ -74,6 +74,9 @@ export async function draftItem(itemId: string) {
       categoryConfident = choice.confident;
     }
     const info = await categoryInfo(chosen.categoryId, { name: chosen.name, path: chosen.path });
+    // Keep the condition you picked on the review screen, if the category allows it.
+    const picked = info.conditions.find((c) => c.conditionId === opts.conditionId);
+    const chosenCondition = picked ? { id: picked.conditionId, name: picked.conditionDescription } : null;
 
     // 3. Price comps (active listings)
     const comps = await findComps(id.keywords, chosen.categoryId).catch(() => []);
@@ -91,6 +94,7 @@ export async function draftItem(itemId: string) {
         compMedian,
         notesToAi: item.notesToAi,
         tested: item.tested,
+        chosenCondition,
       }),
       jsonSchema: writeJsonSchema(info.conditions.map((c) => c.conditionId)),
       schema: listingDraftSchema,
@@ -98,9 +102,9 @@ export async function draftItem(itemId: string) {
       maxTokens: 12000,
     });
 
-    const conditionId = info.conditions.some((c) => c.conditionId === out.conditionId)
-      ? out.conditionId
-      : (info.conditions[0]?.conditionId ?? out.conditionId);
+    const conditionId =
+      chosenCondition?.id ??
+      (info.conditions.some((c) => c.conditionId === out.conditionId) ? out.conditionId : (info.conditions[0]?.conditionId ?? out.conditionId));
     const weightOz = out.weightOz ?? id.estimatedWeightOz;
 
     const flags = draftFlags({
