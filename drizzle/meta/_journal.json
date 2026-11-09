@@ -29,6 +29,13 @@
       "when": 1794192508581,
       "tag": "0003_pickup_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794195073067,
+      "tag": "0004_item_policies",
+      "breakpoints": true
     }
   ]
 }

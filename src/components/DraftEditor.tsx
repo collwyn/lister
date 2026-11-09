@@ -8,7 +8,9 @@ import type { CachedAspect, CachedCondition, Comp } from "@/db/schema";
 import type { loadItem } from "@/lib/items";
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof loadItem>>>;
-type Policy = { id: string; name: string };
+type Policy = { id: string; name: string; immediatePay?: boolean; pickupOnly?: boolean };
+type Policies = { payment: Policy[]; returns: Policy[]; shipping: Policy[] };
+type Defaults = { paymentPolicyId: string | null; pickupPaymentPolicyId: string | null; returnPolicyId: string | null };
 type Category = { categoryId: string; name: string; namePath: string; aspects: CachedAspect[]; conditions: CachedCondition[] };
 type Suggestion = { categoryId: string; name: string; path: string };
 
@@ -19,11 +21,13 @@ export function DraftEditor({
   initial,
   autoDraft,
   defaultShippingPolicyId,
+  defaults,
   ebayConnected,
 }: {
   initial: Loaded;
   autoDraft: boolean;
   defaultShippingPolicyId: string | null;
+  defaults: Defaults;
   ebayConnected: boolean;
 }) {
   const router = useRouter();
@@ -40,6 +44,9 @@ export function DraftEditor({
   const [price, setPrice] = useState(draft?.price ? String(Number(draft.price)) : "");
   const [quantity, setQuantity] = useState(String(draft?.quantity ?? 1));
   const [shippingPolicyId, setShippingPolicyId] = useState<string | null>(draft?.shippingPolicyId ?? defaultShippingPolicyId);
+  // null = use the Settings default
+  const [paymentPolicyId, setPaymentPolicyId] = useState<string | null>(draft?.paymentPolicyId ?? null);
+  const [returnPolicyId, setReturnPolicyId] = useState<string | null>(draft?.returnPolicyId ?? null);
   const [weightOz, setWeightOz] = useState(draft?.weightOz ? String(Number(draft.weightOz)) : "");
   const [dimL, setDimL] = useState(draft?.dims ? String(draft.dims.lengthIn) : "");
   const [dimW, setDimW] = useState(draft?.dims ? String(draft.dims.widthIn) : "");
@@ -49,7 +56,7 @@ export function DraftEditor({
   const [note, setNote] = useState(item.notesToAi ?? "");
 
   const [category, setCategory] = useState<Category | null>(null);
-  const [policies, setPolicies] = useState<Policy[] | null>(null);
+  const [policies, setPolicies] = useState<Policies | null>(null);
   const [busy, setBusy] = useState<null | "draft" | "save" | "publish" | "status">(null);
   const [error, setError] = useState<string | null>(item.status === "failed" || listing?.error ? item.error : null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -74,9 +81,9 @@ export function DraftEditor({
 
   useEffect(() => {
     if (!ebayConnected) return;
-    api<{ shipping: Policy[] }>("/api/ebay/policies")
-      .then((p) => setPolicies(p.shipping))
-      .catch(() => setPolicies([]));
+    api<Policies>("/api/ebay/policies")
+      .then(setPolicies)
+      .catch(() => setPolicies({ payment: [], returns: [], shipping: [] }));
   }, [ebayConnected]);
 
   // ---- actions ----
@@ -121,6 +128,8 @@ export function DraftEditor({
       price: price ? Number(price) : null,
       quantity: Math.max(1, Math.round(Number(quantity) || 1)),
       shippingPolicyId,
+      paymentPolicyId,
+      returnPolicyId,
       weightOz: weightOz ? Number(weightOz) : null,
       dims: dimsValue(),
     };
@@ -449,17 +458,18 @@ export function DraftEditor({
                 </div>
                 <p className="muted small">Weight and box size are used by calculated-shipping policies; flat-rate and local-pickup policies ignore them. 1 lb = 16 oz.</p>
                 <PriceContext comps={comps} confidence={draft.priceConfidence} soldSearch={soldSearch} />
-                <label className="field" htmlFor="shipping">
-                  Shipping policy
-                  <select id="shipping" value={shippingPolicyId ?? ""} onChange={(e) => touch(setShippingPolicyId)(e.target.value || null)} disabled={listed || !policies}>
-                    <option value="">{policies ? "Choose…" : ebayConnected ? "Loading your policies…" : "Connect eBay in Settings first"}</option>
-                    {(policies ?? []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PolicyFields
+                  policies={policies}
+                  ebayConnected={ebayConnected}
+                  disabled={listed}
+                  defaults={defaults}
+                  shippingPolicyId={shippingPolicyId}
+                  paymentPolicyId={paymentPolicyId}
+                  returnPolicyId={returnPolicyId}
+                  onShipping={touch(setShippingPolicyId)}
+                  onPayment={touch(setPaymentPolicyId)}
+                  onReturns={touch(setReturnPolicyId)}
+                />
               </section>
 
               {!listed && (
@@ -711,5 +721,84 @@ function PriceContext({ comps, confidence, soldSearch }: { comps: Comp[]; confid
         )}
       </div>
     </details>
+  );
+}
+
+const policyTag = (p: Policy) => (p.immediatePay ? " (immediate payment)" : p.pickupOnly ? " (local pickup only)" : "");
+
+/** Shipping, payment and return policies for this item. Payment and returns default to Settings. */
+function PolicyFields(props: {
+  policies: Policies | null;
+  ebayConnected: boolean;
+  disabled: boolean;
+  defaults: Defaults;
+  shippingPolicyId: string | null;
+  paymentPolicyId: string | null;
+  returnPolicyId: string | null;
+  onShipping: (v: string | null) => void;
+  onPayment: (v: string | null) => void;
+  onReturns: (v: string | null) => void;
+}) {
+  const { policies, defaults } = props;
+  const loading = !policies;
+  const placeholder = props.ebayConnected ? "Loading your policies…" : "Connect eBay in Settings first";
+  const name = (list: Policy[] | undefined, id: string | null) => list?.find((p) => p.id === id)?.name;
+  const shipping = policies?.shipping.find((p) => p.id === props.shippingPolicyId);
+  const pickup = !!shipping?.pickupOnly;
+  // What "Default" means for payment on this item, as publishing will decide it.
+  const autoPaymentId = pickup && defaults.pickupPaymentPolicyId ? defaults.pickupPaymentPolicyId : defaults.paymentPolicyId;
+  const payment = policies?.payment.find((p) => p.id === (props.paymentPolicyId ?? autoPaymentId));
+  const clash = pickup && payment?.immediatePay;
+
+  const select = (
+    id: string,
+    label: string,
+    value: string | null,
+    onChange: (v: string | null) => void,
+    list: Policy[] | undefined,
+    empty: string,
+  ) => (
+    <label className="field" htmlFor={id}>
+      {label}
+      <select id={id} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} disabled={props.disabled || loading}>
+        <option value="">{loading ? placeholder : empty}</option>
+        {(list ?? []).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+            {policyTag(p)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  return (
+    <>
+      {select("shipping", "Shipping policy", props.shippingPolicyId, props.onShipping, policies?.shipping, "Choose…")}
+      <div className="grid2">
+        {select(
+          "payment",
+          "Payment policy",
+          props.paymentPolicyId,
+          props.onPayment,
+          policies?.payment,
+          `Default${name(policies?.payment, autoPaymentId) ? ` (${name(policies?.payment, autoPaymentId)})` : ""}`,
+        )}
+        {select(
+          "returns",
+          "Return policy",
+          props.returnPolicyId,
+          props.onReturns,
+          policies?.returns,
+          `Default${name(policies?.returns, defaults.returnPolicyId) ? ` (${name(policies?.returns, defaults.returnPolicyId)})` : ""}`,
+        )}
+      </div>
+      {clash && (
+        <p className="error small">
+          This item is local pickup only, and eBay won&apos;t accept a payment policy that requires immediate payment with it. Choose a payment policy
+          without immediate payment{props.paymentPolicyId ? "" : ", or set one under Settings → Payment for local pickup items"}.
+        </p>
+      )}
+    </>
   );
 }
