@@ -26,6 +26,11 @@ export default async function ItemPage({
         initial={data}
         autoDraft={autoDraft === "1" && !loaded.draft && loaded.item.status === "grouped"}
         defaultShippingPolicyId={account?.defaultShippingPolicyId ?? null}
+        defaults={{
+          paymentPolicyId: account?.paymentPolicyId ?? null,
+          pickupPaymentPolicyId: account?.pickupPaymentPolicyId ?? null,
+          returnPolicyId: account?.returnPolicyId ?? null,
+        }}
         ebayConnected={!!account?.refreshTokenEnc}
       />
     </main>

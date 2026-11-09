@@ -119,7 +119,12 @@ export async function draftItem(itemId: string, opts: { conditionId?: string | n
     });
 
     const [latest] = await db()
-      .select({ version: schema.drafts.version })
+      .select({
+        version: schema.drafts.version,
+        shippingPolicyId: schema.drafts.shippingPolicyId,
+        paymentPolicyId: schema.drafts.paymentPolicyId,
+        returnPolicyId: schema.drafts.returnPolicyId,
+      })
       .from(schema.drafts)
       .where(eq(schema.drafts.itemId, itemId))
       .orderBy(desc(schema.drafts.version))
@@ -142,7 +147,10 @@ export async function draftItem(itemId: string, opts: { conditionId?: string | n
         price: out.price.toFixed(2),
         priceConfidence: out.priceConfidence,
         comps,
-        shippingPolicyId: account?.defaultShippingPolicyId ?? null,
+        // Keep the policies chosen on the review screen when redrafting.
+        shippingPolicyId: latest?.shippingPolicyId ?? account?.defaultShippingPolicyId ?? null,
+        paymentPolicyId: latest?.paymentPolicyId ?? null,
+        returnPolicyId: latest?.returnPolicyId ?? null,
         weightOz: weightOz ? weightOz.toFixed(2) : null,
         dims: out.packageIn ?? null,
         aiNotes: [id.notes, out.notes, out.priceReasoning && `Price: ${out.priceReasoning}`].filter(Boolean).join("\n") || null,

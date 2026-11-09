@@ -123,6 +123,8 @@ export const draftEditSchema = z.object({
   price: z.number().nonnegative().nullable(),
   quantity: z.number().int().min(1).max(999),
   shippingPolicyId: z.string().nullable(),
+  paymentPolicyId: z.string().nullable().optional(),
+  returnPolicyId: z.string().nullable().optional(),
   weightOz: z.number().positive().nullable(),
   dims: z
     .object({ lengthIn: z.number().positive(), widthIn: z.number().positive(), heightIn: z.number().positive() })
@@ -156,6 +158,8 @@ export async function saveDraftEdits(itemId: string, edit: DraftEdit) {
       priceConfidence: latest?.priceConfidence ?? null,
       comps: latest?.comps ?? [],
       shippingPolicyId: edit.shippingPolicyId,
+      paymentPolicyId: edit.paymentPolicyId === undefined ? (latest?.paymentPolicyId ?? null) : edit.paymentPolicyId,
+      returnPolicyId: edit.returnPolicyId === undefined ? (latest?.returnPolicyId ?? null) : edit.returnPolicyId,
       weightOz: edit.weightOz === null ? null : edit.weightOz.toFixed(2),
       dims: edit.dims === undefined ? (latest?.dims ?? null) : edit.dims,
       quantity: edit.quantity,
@@ -179,7 +183,8 @@ export async function publishItem(itemId: string) {
   const e = env();
   const sku = item.id;
   const fulfillmentPolicyId = draft.shippingPolicyId ?? account?.defaultShippingPolicyId ?? "";
-  const paymentPolicyId = await choosePaymentPolicy({
+  // A payment policy picked for this item wins; otherwise pickup-only items get the pickup payment policy.
+  const paymentPolicyId = draft.paymentPolicyId ?? await choosePaymentPolicy({
     shippingPolicyId: fulfillmentPolicyId,
     paymentPolicyId: account?.paymentPolicyId ?? "",
     pickupPaymentPolicyId: account?.pickupPaymentPolicyId,
@@ -200,7 +205,7 @@ export async function publishItem(itemId: string) {
     marketplaceId: e.EBAY_MARKETPLACE_ID,
     policies: {
       paymentPolicyId,
-      returnPolicyId: account?.returnPolicyId ?? "",
+      returnPolicyId: draft.returnPolicyId ?? account?.returnPolicyId ?? "",
       fulfillmentPolicyId,
     },
     merchantLocationKey: account?.locationKey ?? "",

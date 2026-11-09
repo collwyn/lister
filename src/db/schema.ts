@@ -125,6 +125,9 @@ export const drafts = pgTable(
     priceConfidence: text("price_confidence"),
     comps: jsonb("comps").$type<Comp[]>().notNull().default([]),
     shippingPolicyId: text("shipping_policy_id"),
+    // Per-item overrides; null means the Settings default (payment: chosen automatically for pickup items).
+    paymentPolicyId: text("payment_policy_id"),
+    returnPolicyId: text("return_policy_id"),
     weightOz: numeric("weight_oz", { precision: 8, scale: 2 }),
     dims: jsonb("dims").$type<Dims | null>(),
     quantity: integer("quantity").notNull().default(1),
