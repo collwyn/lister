@@ -1,0 +1,1 @@
+ALTER TABLE "ebay_account" ADD COLUMN "pickup_payment_policy_id" text;

@@ -182,6 +182,8 @@ export const ebayAccount = pgTable("ebay_account", {
   refreshTokenEnc: text("refresh_token_enc"), // AES-256-GCM, see src/lib/crypto.ts
   refreshTokenExpires: timestamp("refresh_token_expires", { withTimezone: true }),
   paymentPolicyId: text("payment_policy_id"),
+  // Used instead of paymentPolicyId for pickup-only items (eBay forbids immediate payment with local pickup).
+  pickupPaymentPolicyId: text("pickup_payment_policy_id"),
   returnPolicyId: text("return_policy_id"),
   defaultShippingPolicyId: text("default_shipping_policy_id"),
   locationKey: text("location_key"),

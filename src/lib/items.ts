@@ -7,6 +7,7 @@ import { processPhoto } from "@/lib/images";
 import { publicUrl, putOriginal, putPublic } from "@/lib/storage";
 import { getAccount } from "@/lib/ebay/auth";
 import { getPublisher, listingUrl } from "@/lib/ebay/publisher";
+import { choosePaymentPolicy } from "@/lib/ebay/account";
 import { endEbayListing } from "@/lib/ebay/end-listing";
 import { duplicateListingId } from "@/lib/ebay/trading-xml";
 import type { ListingInput } from "@/lib/ebay/listing";
@@ -177,6 +178,12 @@ export async function publishItem(itemId: string) {
   const account = await getAccount();
   const e = env();
   const sku = item.id;
+  const fulfillmentPolicyId = draft.shippingPolicyId ?? account?.defaultShippingPolicyId ?? "";
+  const paymentPolicyId = await choosePaymentPolicy({
+    shippingPolicyId: fulfillmentPolicyId,
+    paymentPolicyId: account?.paymentPolicyId ?? "",
+    pickupPaymentPolicyId: account?.pickupPaymentPolicyId,
+  });
   const input: ListingInput = {
     sku,
     title: draft.title,
@@ -192,9 +199,9 @@ export async function publishItem(itemId: string) {
     dims: draft.dims,
     marketplaceId: e.EBAY_MARKETPLACE_ID,
     policies: {
-      paymentPolicyId: account?.paymentPolicyId ?? "",
+      paymentPolicyId,
       returnPolicyId: account?.returnPolicyId ?? "",
-      fulfillmentPolicyId: draft.shippingPolicyId ?? account?.defaultShippingPolicyId ?? "",
+      fulfillmentPolicyId,
     },
     merchantLocationKey: account?.locationKey ?? "",
     relist: listing?.relistCount ?? 0,

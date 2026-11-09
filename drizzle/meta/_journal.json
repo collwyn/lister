@@ -22,6 +22,13 @@
       "when": 1793942317118,
       "tag": "0002_batch_grouping",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794192508581,
+      "tag": "0003_pickup_payment",
+      "breakpoints": true
     }
   ]
 }
