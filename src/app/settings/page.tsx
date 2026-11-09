@@ -18,6 +18,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         refreshExpires={account?.refreshTokenExpires?.toISOString() ?? null}
         saved={{
           paymentPolicyId: account?.paymentPolicyId ?? null,
+          pickupPaymentPolicyId: account?.pickupPaymentPolicyId ?? null,
           returnPolicyId: account?.returnPolicyId ?? null,
           defaultShippingPolicyId: account?.defaultShippingPolicyId ?? null,
           locationKey: account?.locationKey ?? null,

@@ -7,13 +7,38 @@ import { EbayError, ebayFetch } from "./http";
 // Business policies (payment, returns, shipping) and the ship-from location.
 // The Inventory API requires both on every listing.
 
-export type Policy = { id: string; name: string; description?: string };
+export type Policy = {
+  id: string;
+  name: string;
+  description?: string;
+  /** Payment policies: Buy It Now buyers must pay at once. */
+  immediatePay?: boolean;
+  /** Shipping policies: local pickup and no shipping services. */
+  pickupOnly?: boolean;
+};
+
+type RawPayment = { paymentPolicyId: string; name: string; description?: string; immediatePay?: boolean };
+type RawFulfillment = {
+  fulfillmentPolicyId: string;
+  name: string;
+  description?: string;
+  localPickup?: boolean;
+  shippingOptions?: { shippingServices?: unknown[] }[];
+};
+
+/** A shipping policy is pickup-only when it offers local pickup and no shipping service. Pure. */
+export function isPickupOnly(p: Pick<RawFulfillment, "localPickup" | "shippingOptions">): boolean {
+  return !!p.localPickup && !(p.shippingOptions ?? []).some((o) => (o.shippingServices ?? []).length > 0);
+}
+
+const paymentView = (x: RawPayment): Policy => ({ id: x.paymentPolicyId, name: x.name, description: x.description, immediatePay: !!x.immediatePay });
+const shippingView = (x: RawFulfillment): Policy => ({ id: x.fulfillmentPolicyId, name: x.name, description: x.description, pickupOnly: isPickupOnly(x) });
 
 export async function listPolicies(): Promise<{ payment: Policy[]; returns: Policy[]; shipping: Policy[] }> {
   const token = await userToken();
   const query = { marketplace_id: env().EBAY_MARKETPLACE_ID };
   const [p, r, f] = await Promise.all([
-    ebayFetch<{ paymentPolicies?: { paymentPolicyId: string; name: string; description?: string }[] }>(
+    ebayFetch<{ paymentPolicies?: RawPayment[] }>(
       "/sell/account/v1/payment_policy",
       token,
       { query },
@@ -23,21 +48,60 @@ export async function listPolicies(): Promise<{ payment: Policy[]; returns: Poli
       token,
       { query },
     ),
-    ebayFetch<{ fulfillmentPolicies?: { fulfillmentPolicyId: string; name: string; description?: string }[] }>(
+    ebayFetch<{ fulfillmentPolicies?: RawFulfillment[] }>(
       "/sell/account/v1/fulfillment_policy",
       token,
       { query },
     ),
   ]);
   return {
-    payment: (p.paymentPolicies ?? []).map((x) => ({ id: x.paymentPolicyId, name: x.name, description: x.description })),
+    payment: (p.paymentPolicies ?? []).map(paymentView),
     returns: (r.returnPolicies ?? []).map((x) => ({ id: x.returnPolicyId, name: x.name, description: x.description })),
-    shipping: (f.fulfillmentPolicies ?? []).map((x) => ({
-      id: x.fulfillmentPolicyId,
-      name: x.name,
-      description: x.description,
-    })),
+    shipping: (f.fulfillmentPolicies ?? []).map(shippingView),
   };
+}
+
+export class PickupPaymentError extends Error {
+  constructor() {
+    super(
+      "This item's shipping policy is local pickup only, and eBay doesn't allow immediate payment with local pickup. " +
+        "In Seller Hub, create a payment policy without \"Require immediate payment\", then pick it under Settings → Payment for local pickup items.",
+    );
+    this.name = "PickupPaymentError";
+  }
+}
+
+/**
+ * The payment policy to list with. eBay refuses immediate payment on
+ * pickup-only listings, so those use the pickup payment policy from Settings.
+ * If eBay can't be asked about the policies, the default is used and eBay decides.
+ */
+export async function choosePaymentPolicy(
+  ids: { shippingPolicyId: string; paymentPolicyId: string; pickupPaymentPolicyId?: string | null },
+  fetcher: typeof ebayFetch = ebayFetch,
+  token: () => Promise<string> = userToken,
+): Promise<string> {
+  if (!ids.shippingPolicyId || !ids.paymentPolicyId) return ids.paymentPolicyId;
+  let pickupOnly = false;
+  let t = "";
+  try {
+    t = await token();
+    const shipping = await fetcher<RawFulfillment>(`/sell/account/v1/fulfillment_policy/${encodeURIComponent(ids.shippingPolicyId)}`, t);
+    pickupOnly = isPickupOnly(shipping);
+  } catch (err) {
+    if (err instanceof EbayError) return ids.paymentPolicyId;
+    throw err;
+  }
+  if (!pickupOnly) return ids.paymentPolicyId;
+  if (ids.pickupPaymentPolicyId) return ids.pickupPaymentPolicyId;
+  try {
+    const payment = await fetcher<RawPayment>(`/sell/account/v1/payment_policy/${encodeURIComponent(ids.paymentPolicyId)}`, t);
+    if (!payment.immediatePay) return ids.paymentPolicyId;
+  } catch (err) {
+    if (err instanceof EbayError) return ids.paymentPolicyId;
+    throw err;
+  }
+  throw new PickupPaymentError();
 }
 
 export async function optInToBusinessPolicies(): Promise<"opted_in" | "already"> {
@@ -154,6 +218,7 @@ export async function createLocation(input: LocationInput): Promise<string> {
 
 export async function saveSettings(values: {
   paymentPolicyId?: string | null;
+  pickupPaymentPolicyId?: string | null;
   returnPolicyId?: string | null;
   defaultShippingPolicyId?: string | null;
   locationKey?: string | null;

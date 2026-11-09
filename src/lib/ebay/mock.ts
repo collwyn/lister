@@ -173,13 +173,17 @@ const CONDITION_NAMES: Record<string, string> = {
 };
 
 const POLICIES = {
-  payment: [{ paymentPolicyId: "mock-pay", name: "Test payment (immediate)" }],
+  payment: [
+    { paymentPolicyId: "mock-pay", name: "Test payment (immediate)", immediatePay: true },
+    { paymentPolicyId: "mock-pay-pickup", name: "Test payment (no immediate payment)", immediatePay: false },
+  ],
   returns: [{ returnPolicyId: "mock-ret", name: "Test 30-day returns" }],
   shipping: [
     { fulfillmentPolicyId: "mock-ship-media", name: "Test Media Mail (books, comics, records)" },
     { fulfillmentPolicyId: "mock-ship-small", name: "Test small package" },
     { fulfillmentPolicyId: "mock-ship-large", name: "Test large package, calculated" },
-  ],
+    { fulfillmentPolicyId: "mock-ship-pickup", name: "Test local pickup only", localPickup: true, shippingOptions: [] },
+  ].map((p) => ({ shippingOptions: [{ shippingServices: [{ shippingServiceCode: "USPSGroundAdvantage" }] }], ...p })),
 };
 
 const words = (s: string) => s.toLowerCase().match(/[a-z0-9-]+/g) ?? [];
@@ -284,6 +288,15 @@ export async function mockEbay<T>(path: string, init: Init = {}): Promise<T> {
   if (path === "/sell/account/v1/return_policy") return r(method === "POST" ? { returnPolicyId: "mock-ret" } : { returnPolicies: POLICIES.returns });
   if (path === "/sell/account/v1/fulfillment_policy")
     return r(method === "POST" ? { fulfillmentPolicyId: "mock-ship-small" } : { fulfillmentPolicies: POLICIES.shipping });
+  const onePolicy = /^\/sell\/account\/v1\/(payment|fulfillment)_policy\/(.+)$/.exec(path);
+  if (onePolicy && method === "GET") {
+    const id = decodeURIComponent(onePolicy[2]);
+    const found =
+      onePolicy[1] === "payment"
+        ? POLICIES.payment.find((x) => x.paymentPolicyId === id)
+        : POLICIES.shipping.find((x) => x.fulfillmentPolicyId === id);
+    return found ? r(found) : fail(404, 20404, "Policy not found.");
+  }
   if (path === "/sell/account/v1/program/opt_in") return r({});
   if (path.startsWith("/sell/inventory/v1/location/")) return r(null);
 

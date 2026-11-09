@@ -64,6 +64,9 @@ export async function mockTrading(callName: string, xml: string): Promise<string
   }
   if (!/<PictureURL>/.test(item)) problems.push({ code: 21919136, message: "At least one photo is required." });
   if (!tagValue(item, "PostalCode")) problems.push({ code: 10019, message: "A postal code is required." });
+  if (/<ShippingProfileID>mock-ship-pickup</.test(item) && /<PaymentProfileID>mock-pay</.test(item)) {
+    problems.push({ code: 21919136, message: "Because you've specified Local Pickup Only for this item, you can't require immediate payment." });
+  }
   if (!/<PaymentProfileID>[^<]+</.test(item) || !/<ShippingProfileID>[^<]+</.test(item)) {
     problems.push({ code: 21916250, message: "Business policies are required." });
   }

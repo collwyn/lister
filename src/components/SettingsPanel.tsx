@@ -4,9 +4,10 @@ import { api } from "@/lib/client-api";
 
 import { useEffect, useState } from "react";
 
-type Policy = { id: string; name: string };
+type Policy = { id: string; name: string; immediatePay?: boolean; pickupOnly?: boolean };
 type Saved = {
   paymentPolicyId: string | null;
+  pickupPaymentPolicyId: string | null;
   returnPolicyId: string | null;
   defaultShippingPolicyId: string | null;
   locationKey: string | null;
@@ -68,19 +69,24 @@ export function SettingsPanel(props: {
     }
   }
 
-  const select = (key: keyof Saved, list: Policy[] | undefined, label: string) => (
+  const tag = (p: Policy) => (p.immediatePay ? " (immediate payment)" : p.pickupOnly ? " (local pickup only)" : "");
+  const select = (key: keyof Saved, list: Policy[] | undefined, label: string, empty = "Choose…") => (
     <label className="field" htmlFor={key}>
       {label}
       <select id={key} value={choice[key] ?? ""} onChange={(e) => setChoice({ ...choice, [key]: e.target.value || null })}>
-        <option value="">Choose…</option>
+        <option value="">{empty}</option>
         {(list ?? []).map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
+            {tag(p)}
           </option>
         ))}
       </select>
     </label>
   );
+  const pickupShipping = (policies?.shipping ?? []).filter((p) => p.pickupOnly);
+  const pickupPaymentChoices = (policies?.payment ?? []).filter((p) => !p.immediatePay);
+  const pickupChoice = (policies?.payment ?? []).find((p) => p.id === choice.pickupPaymentPolicyId);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -146,6 +152,18 @@ export function SettingsPanel(props: {
           {select("returnPolicyId", policies?.returns, "Returns")}
           {select("defaultShippingPolicyId", policies?.shipping, "Default shipping")}
         </div>
+        {pickupShipping.length > 0 && (
+          <div style={{ display: "grid", gap: 6 }}>
+            {select("pickupPaymentPolicyId", pickupPaymentChoices, "Payment for local pickup items", "Same as Payment")}
+            <p className="muted small" style={{ margin: 0 }}>
+              eBay doesn&apos;t allow immediate payment on local-pickup-only listings ({pickupShipping.map((p) => p.name).join(", ")}). Items with that
+              shipping policy are listed with this payment policy instead.
+              {pickupPaymentChoices.length === 0 &&
+                " None of your payment policies qualify yet: in Seller Hub, create one with \"Require immediate payment\" turned off, then Reload policies."}
+              {pickupChoice?.immediatePay && " The policy chosen requires immediate payment, so it won't work for pickup."}
+            </p>
+          </div>
+        )}
         <div>
           <button
             className="btn primary"
@@ -156,6 +174,7 @@ export function SettingsPanel(props: {
                 () =>
                   post("/api/ebay/settings", {
                     paymentPolicyId: choice.paymentPolicyId,
+                    pickupPaymentPolicyId: choice.pickupPaymentPolicyId,
                     returnPolicyId: choice.returnPolicyId,
                     defaultShippingPolicyId: choice.defaultShippingPolicyId,
                   }),

@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   paymentPolicyId: z.string().min(1).nullable(),
+  pickupPaymentPolicyId: z.string().min(1).nullable().optional(),
   returnPolicyId: z.string().min(1).nullable(),
   defaultShippingPolicyId: z.string().min(1).nullable(),
 });
